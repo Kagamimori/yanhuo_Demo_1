@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,12 +9,12 @@ public class PlayerPanel : MonoBehaviour
     public static PlayerPanel Instance;
 
     [Header("UI组件")]
-    public Text txtPlayerName;           // 玩家名称
-    public Text txtPlayerGold;           // 玩家金币
-    public Text txtPlayerIdentity;       // 玩家身份
-    public Transform handCardRoot;       // 手牌容器
-    public Transform openCardRoot;       // 明牌区容器
-    public GameObject prefabCard;        // 卡牌预制体
+    public TMP_Text txtPlayerName;
+    public TMP_Text txtPlayerGold;
+    public TMP_Text txtPlayerIdentity;
+    public Transform handCardRoot;
+    public Transform openCardRoot;
+    public GameObject prefabCard;
 
     [Header("操作按钮")]
     public Button closeButton;
@@ -23,8 +24,8 @@ public class PlayerPanel : MonoBehaviour
 
     [Header("购买面板")]
     public GameObject buyPanel;
-    public Dropdown goodsDropdown;
-    public InputField priceInput;
+    public TMP_Dropdown goodsDropdown;
+    public TMP_InputField priceInput;
     public Button confirmBuyButton;
     public Button cancelBuyButton;
 
@@ -33,7 +34,6 @@ public class PlayerPanel : MonoBehaviour
     private CardData selectedCardForPlace;
     private bool isInitialized = false;
 
-    // 添加缺失的委托定义
     public System.Action<int, CardData> OnCardSelected;
     public System.Action<int, int> OnOpenSlotSelected;
 
@@ -67,7 +67,6 @@ public class PlayerPanel : MonoBehaviour
         Debug.Log("PlayerPanel 初始化完成");
     }
 
-    // 添加 Initialize 方法
     public void Initialize(int playerIndex, PlayerData data)
     {
         currentPlayerIndex = playerIndex;
@@ -145,7 +144,6 @@ public class PlayerPanel : MonoBehaviour
         }
     }
 
-    // 修改 UpdateHandCards 方法，触发 OnCardSelected 事件
     private void UpdateHandCards()
     {
         if (handCardRoot == null)
@@ -178,7 +176,6 @@ public class PlayerPanel : MonoBehaviour
                 int cardIndex = i;
                 CardData capturedCard = card;
                 cardUI.OnCardClick = (ui) => {
-                    // 触发 OnCardSelected 事件
                     if (OnCardSelected != null)
                     {
                         OnCardSelected(cardIndex, capturedCard);
@@ -189,7 +186,6 @@ public class PlayerPanel : MonoBehaviour
         }
     }
 
-    // 修改 UpdateOpenCards 方法，触发 OnOpenSlotSelected 事件
     private void UpdateOpenCards()
     {
         if (openCardRoot == null)
@@ -228,7 +224,6 @@ public class PlayerPanel : MonoBehaviour
 
                 int slotIndex = i;
                 cardUI.OnCardClick = (ui) => {
-                    // 触发 OnOpenSlotSelected 事件
                     if (OnOpenSlotSelected != null)
                     {
                         OnOpenSlotSelected(slotIndex, slotIndex);
@@ -239,12 +234,10 @@ public class PlayerPanel : MonoBehaviour
         }
     }
 
-    // 添加缺失的 Refresh 方法
-    public void Refresh()
+    public void RefreshPanel()
     {
         if (gameObject != null && gameObject.activeSelf && currentPlayerData != null)
         {
-            // 刷新显示
             if (txtPlayerGold != null)
                 txtPlayerGold.text = $"金币: {currentPlayerData.gold}";
 
@@ -257,7 +250,6 @@ public class PlayerPanel : MonoBehaviour
         }
     }
 
-    // 其他方法保持不变...
     private void AutoCreateMissingComponents()
     {
         RectTransform parentRect = GetComponent<RectTransform>();
@@ -347,11 +339,11 @@ public class PlayerPanel : MonoBehaviour
             nameRect.offsetMin = new Vector2(10, 10);
             nameRect.offsetMax = new Vector2(-10, -10);
 
-            txtPlayerName = nameObj.AddComponent<Text>();
-            txtPlayerName.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            txtPlayerName = nameObj.AddComponent<TMP_Text>();
+            txtPlayerName.font = TMP_Settings.defaultFontAsset;
             txtPlayerName.fontSize = 28;
             txtPlayerName.color = Color.white;
-            txtPlayerName.alignment = TextAnchor.MiddleLeft;
+            txtPlayerName.alignment = TextAlignmentOptions.Left;  // 修复：使用 Left
             txtPlayerName.text = "玩家1";
             Debug.Log("自动创建了玩家名称文本");
         }
@@ -367,11 +359,11 @@ public class PlayerPanel : MonoBehaviour
             goldRect.offsetMin = new Vector2(10, 10);
             goldRect.offsetMax = new Vector2(-10, -10);
 
-            txtPlayerGold = goldObj.AddComponent<Text>();
-            txtPlayerGold.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            txtPlayerGold = goldObj.AddComponent<TMP_Text>();
+            txtPlayerGold.font = TMP_Settings.defaultFontAsset;
             txtPlayerGold.fontSize = 28;
             txtPlayerGold.color = Color.yellow;
-            txtPlayerGold.alignment = TextAnchor.MiddleCenter;
+            txtPlayerGold.alignment = TextAlignmentOptions.Center;  // 修复：使用 Center
             txtPlayerGold.text = "金币: 0";
             Debug.Log("自动创建了玩家金币文本");
         }
@@ -387,11 +379,11 @@ public class PlayerPanel : MonoBehaviour
             identityRect.offsetMin = new Vector2(10, 10);
             identityRect.offsetMax = new Vector2(-10, -10);
 
-            txtPlayerIdentity = identityObj.AddComponent<Text>();
-            txtPlayerIdentity.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            txtPlayerIdentity = identityObj.AddComponent<TMP_Text>();
+            txtPlayerIdentity.font = TMP_Settings.defaultFontAsset;
             txtPlayerIdentity.fontSize = 24;
             txtPlayerIdentity.color = Color.cyan;
-            txtPlayerIdentity.alignment = TextAnchor.MiddleRight;
+            txtPlayerIdentity.alignment = TextAlignmentOptions.Right;  // 修复：使用 Right
             txtPlayerIdentity.text = "身份: 真货商人";
             Debug.Log("自动创建了玩家身份文本");
         }
@@ -458,11 +450,11 @@ public class PlayerPanel : MonoBehaviour
 
         GameObject textObj = new GameObject("Text");
         textObj.transform.SetParent(btnObj.transform);
-        Text text = textObj.AddComponent<Text>();
+        TMP_Text text = textObj.AddComponent<TMP_Text>();
         text.text = buttonText;
-        text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        text.font = TMP_Settings.defaultFontAsset;
         text.fontSize = 20;
-        text.alignment = TextAnchor.MiddleCenter;
+        text.alignment = TextAlignmentOptions.Center;  // 修复：使用 Center
         text.color = Color.white;
 
         RectTransform textRect = textObj.GetComponent<RectTransform>();
@@ -495,7 +487,7 @@ public class PlayerPanel : MonoBehaviour
         dropdownRect.anchorMax = new Vector2(0.8f, 0.8f);
         dropdownRect.offsetMin = Vector2.zero;
         dropdownRect.offsetMax = Vector2.zero;
-        goodsDropdown = dropdownObj.AddComponent<Dropdown>();
+        goodsDropdown = dropdownObj.AddComponent<TMP_Dropdown>();
 
         GameObject inputObj = new GameObject("PriceInput");
         inputObj.transform.SetParent(buyPanel.transform);
@@ -504,7 +496,7 @@ public class PlayerPanel : MonoBehaviour
         inputRect.anchorMax = new Vector2(0.8f, 0.5f);
         inputRect.offsetMin = Vector2.zero;
         inputRect.offsetMax = Vector2.zero;
-        priceInput = inputObj.AddComponent<InputField>();
+        priceInput = inputObj.AddComponent<TMP_InputField>();
 
         GameObject confirmObj = CreateButtonObject("ConfirmButton", "确认购买");
         confirmObj.transform.SetParent(buyPanel.transform);
@@ -540,10 +532,10 @@ public class PlayerPanel : MonoBehaviour
 
         GameObject nameTextObj = new GameObject("NameText");
         nameTextObj.transform.SetParent(card.transform);
-        Text nameText = nameTextObj.AddComponent<Text>();
-        nameText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        TMP_Text nameText = nameTextObj.AddComponent<TMP_Text>();
+        nameText.font = TMP_Settings.defaultFontAsset;
         nameText.fontSize = 14;
-        nameText.alignment = TextAnchor.MiddleCenter;
+        nameText.alignment = TextAlignmentOptions.Center;  // 修复：使用 Center
         nameText.color = Color.black;
 
         RectTransform nameRect = nameTextObj.GetComponent<RectTransform>();
@@ -841,14 +833,6 @@ public class PlayerPanel : MonoBehaviour
 
         GameManager.Instance.RequestBuy(-1, selectedType, price);
         ShowPlayerInfo(currentPlayerIndex);
-    }
-
-    public void RefreshPanel()
-    {
-        if (gameObject != null && gameObject.activeSelf && currentPlayerData != null)
-        {
-            ShowPlayerInfo(currentPlayerIndex);
-        }
     }
 
     public void ClearSelectedCardInPanel()

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,13 +9,13 @@ public class BankPanel : MonoBehaviour
     public static BankPanel Instance;
 
     [Header("UI组件")]
-    public Text bankTitleText;
-    public Text sugarStockText;
-    public Text oilStockText;
-    public Text flourStockText;
-    public Text priceText;
-    public InputField priceInput;
-    public Dropdown goodsDropdown;
+    public TMP_Text bankTitleText;
+    public TMP_Text sugarStockText;
+    public TMP_Text oilStockText;
+    public TMP_Text flourStockText;
+    public TMP_Text priceText;
+    public TMP_InputField priceInput;        // 改为 TMP_InputField
+    public TMP_Dropdown goodsDropdown;       // 改为 TMP_Dropdown
     public Button buyButton;
     public Button closeButton;
 
@@ -63,7 +64,6 @@ public class BankPanel : MonoBehaviour
             return;
         }
 
-        // 更新库存 - 使用 GetBankStock 方法
         if (sugarStockText != null)
         {
             int stock = GameManager.Instance.GetBankStock(CardData.CardType.Sugar);
@@ -82,7 +82,6 @@ public class BankPanel : MonoBehaviour
             flourStockText.text = $"面库存: {stock}张";
         }
 
-        // 更新价格
         if (GameManager.Instance.players != null &&
             GameManager.Instance.players.Count > GameManager.Instance.currentTurnIndex)
         {
@@ -108,7 +107,6 @@ public class BankPanel : MonoBehaviour
             return;
         }
 
-        // 获取选择的货物类型
         CardData.CardType selectedType = CardData.CardType.Sugar;
         if (goodsDropdown != null)
         {
@@ -120,27 +118,21 @@ public class BankPanel : MonoBehaviour
             }
         }
 
-        // 获取输入的价格
         int price = 12;
         if (priceInput != null && !string.IsNullOrEmpty(priceInput.text))
         {
             int.TryParse(priceInput.text, out price);
         }
 
-        // 检查银行是否有货
         if (!GameManager.Instance.BankHasGoods(selectedType))
         {
             Panel.Instance?.AddLog("银行没有这种货物了");
             return;
         }
 
-        // 发起购买请求（-1 表示向银行购买）
         GameManager.Instance.RequestBuy(-1, selectedType, price);
-
-        // 刷新显示
         UpdateBankInfo();
 
-        // 如果购买后不能再购买，关闭面板
         PlayerData currentPlayer = GameManager.Instance.players[GameManager.Instance.currentTurnIndex];
         if (currentPlayer.hasBoughtThisTurn)
         {

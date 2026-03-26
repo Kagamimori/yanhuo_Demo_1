@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -15,7 +16,7 @@ public class Panel : MonoBehaviour
     [System.Serializable]
     public class PlayerUI
     {
-        public Text goldText;
+        public TMP_Text goldText;           // 改为 TMP_Text
         public Transform handCardContainer;
         public Transform openCardContainer;
         public Button[] actionButtons;
@@ -24,9 +25,9 @@ public class Panel : MonoBehaviour
     public PlayerUI[] playerUIs;
     public Button phase1Button;
     public Button phase2Button;
-    public Text gameStateText;
-    public Text logText;
-    public GameObject cardPrefab; // 这个必须在Inspector中赋值
+    public TMP_Text gameStateText;
+    public TMP_Text logText;
+    public GameObject cardPrefab;
 
     void Awake()
     {
@@ -42,7 +43,6 @@ public class Panel : MonoBehaviour
 
     void Start()
     {
-        // 绑定银行按钮
         if (btn_bank != null)
         {
             btn_bank.onClick.AddListener(() =>
@@ -52,7 +52,6 @@ public class Panel : MonoBehaviour
             });
         }
 
-        // 绑定玩家1按钮
         if (btn_player1 != null)
         {
             btn_player1.onClick.AddListener(() =>
@@ -62,7 +61,6 @@ public class Panel : MonoBehaviour
             });
         }
 
-        // 绑定玩家2按钮
         if (btn_player2 != null)
         {
             btn_player2.onClick.AddListener(() =>
@@ -81,7 +79,6 @@ public class Panel : MonoBehaviour
         if (ui.goldText != null)
             ui.goldText.text = $"金币: {player.gold}";
 
-        // 更新手牌显示 - 添加空值检查
         if (ui.handCardContainer != null)
         {
             UpdateCardContainer(ui.handCardContainer, player.handCards);
@@ -91,7 +88,6 @@ public class Panel : MonoBehaviour
             Debug.LogWarning($"玩家{playerIndex}的手牌容器未赋值");
         }
 
-        // 更新明牌区显示 - 添加空值检查
         if (ui.openCardContainer != null)
         {
             UpdateOpenCardContainer(ui.openCardContainer, player.openCards);
@@ -104,7 +100,6 @@ public class Panel : MonoBehaviour
 
     private void UpdateCardContainer(Transform container, List<CardData> cards)
     {
-        // 检查容器和预制体
         if (container == null)
         {
             Debug.LogError("手牌容器为空！");
@@ -113,17 +108,15 @@ public class Panel : MonoBehaviour
 
         if (cardPrefab == null)
         {
-            Debug.LogError("卡牌预制体未赋值！请在Inspector中拖拽卡牌预制体到 cardPrefab 字段");
+            Debug.LogError("卡牌预制体未赋值！");
             return;
         }
 
-        // 清空容器
         foreach (Transform child in container)
         {
             Destroy(child.gameObject);
         }
 
-        // 动态创建卡牌UI
         foreach (var card in cards)
         {
             GameObject cardObj = Instantiate(cardPrefab, container);
@@ -137,7 +130,6 @@ public class Panel : MonoBehaviour
 
     private void UpdateOpenCardContainer(Transform container, List<CardData> openCards)
     {
-        // 检查容器和预制体
         if (container == null)
         {
             Debug.LogError("明牌区容器为空！");
@@ -146,11 +138,10 @@ public class Panel : MonoBehaviour
 
         if (cardPrefab == null)
         {
-            Debug.LogError("卡牌预制体未赋值！请在Inspector中拖拽卡牌预制体到 cardPrefab 字段");
+            Debug.LogError("卡牌预制体未赋值！");
             return;
         }
 
-        // 如果容器子物体数量不对，重新创建
         if (container.childCount != openCards.Count)
         {
             foreach (Transform child in container)
@@ -158,7 +149,6 @@ public class Panel : MonoBehaviour
                 Destroy(child.gameObject);
             }
 
-            // 创建9个槽位
             for (int i = 0; i < openCards.Count; i++)
             {
                 GameObject slotObj = Instantiate(cardPrefab, container);
@@ -166,7 +156,6 @@ public class Panel : MonoBehaviour
             }
         }
 
-        // 更新每个槽位
         for (int i = 0; i < openCards.Count && i < container.childCount; i++)
         {
             Transform slot = container.GetChild(i);
@@ -202,7 +191,6 @@ public class Panel : MonoBehaviour
         {
             logText.text = $"{System.DateTime.Now:HH:mm:ss} - {message}\n" + logText.text;
 
-            // 限制日志行数
             string[] lines = logText.text.Split('\n');
             if (lines.Length > 20)
             {

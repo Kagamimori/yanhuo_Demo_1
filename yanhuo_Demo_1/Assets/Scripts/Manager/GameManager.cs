@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,7 +26,7 @@ public class GameManager : MonoBehaviour
     private const int FAKE_OIL_COUNT = 12;
     private const int FAKE_FLOUR_COUNT = 12;
 
-    // UI组件引用
+    // UI组件引用 - 改为 TMP_Text
     [Header("阶段1按钮")]
     public Button sellRealCardButton;
     public GameObject sellCardPanel;
@@ -39,29 +40,29 @@ public class GameManager : MonoBehaviour
     public Button endTurnButton;
 
     [Header("其他UI")]
-    public Text turnText;
-    public Text stateText;
-    public Text logText;
+    public TMP_Text turnText;          // 改为 TMP_Text
+    public TMP_Text stateText;         // 改为 TMP_Text
+    public TMP_Text logText;           // 改为 TMP_Text
 
     [Header("玩家面板")]
     public PlayerPanel[] playerPanels;
     public GameObject cardPrefab;
 
     [Header("银行UI组件")]
-    public Text bankSugarText;
-    public Text bankOilText;
-    public Text bankFlourText;
+    public TMP_Text bankSugarText;     // 改为 TMP_Text
+    public TMP_Text bankOilText;       // 改为 TMP_Text
+    public TMP_Text bankFlourText;     // 改为 TMP_Text
     public GameObject bankPanel;
 
     [Header("对话框UI")]
     public GameObject sellerDialogPanel;
-    public Text sellerDialogText;
+    public TMP_Text sellerDialogText;  // 改为 TMP_Text
     public Button acceptButton;
     public Button rejectButton;
 
     [Header("验货对话框")]
     public GameObject inspectDialogPanel;
-    public Text inspectDialogText;
+    public TMP_Text inspectDialogText; // 改为 TMP_Text
     public Button inspectButton;
     public Button noInspectButton;
 
@@ -322,10 +323,17 @@ public class GameManager : MonoBehaviour
 
         if (realCards.Count == 0)
         {
-            Text emptyText = new GameObject("EmptyText").AddComponent<Text>();
-            emptyText.transform.SetParent(sellCardPanel.transform);
+            // 使用 TMP_Text 创建空提示
+            GameObject emptyTextObj = new GameObject("EmptyText");
+            emptyTextObj.transform.SetParent(sellCardPanel.transform);
+            TMP_Text emptyText = emptyTextObj.AddComponent<TMP_Text>();
             emptyText.text = "没有可出售的真货";
             emptyText.color = Color.gray;
+            emptyText.fontSize = 20;
+            emptyText.alignment = TextAlignmentOptions.Center;
+
+            RectTransform rect = emptyTextObj.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(200, 50);
             return;
         }
 
@@ -338,9 +346,11 @@ public class GameManager : MonoBehaviour
             rect.sizeDelta = new Vector2(100, 40);
 
             Button btn = cardButton.AddComponent<Button>();
-            Text btnText = cardButton.AddComponent<Text>();
+            TMP_Text btnText = cardButton.AddComponent<TMP_Text>();
             btnText.text = GetCardName(card);
-            btnText.alignment = TextAnchor.MiddleCenter;
+            btnText.alignment = TextAlignmentOptions.Center;
+            btnText.fontSize = 16;
+            btnText.color = Color.black;
 
             btn.onClick.AddListener(() => {
                 OnSellRealCard(card);
@@ -412,8 +422,9 @@ public class GameManager : MonoBehaviour
             rect.sizeDelta = new Vector2(100, 100);
 
             Button btn = slot.AddComponent<Button>();
-            Text slotText = slot.AddComponent<Text>();
-            slotText.alignment = TextAnchor.MiddleCenter;
+            TMP_Text slotText = slot.AddComponent<TMP_Text>();
+            slotText.alignment = TextAlignmentOptions.Center;
+            slotText.fontSize = 14;
 
             CardData card = currentPlayer.openCards[i];
             if (card != null)
@@ -460,6 +471,7 @@ public class GameManager : MonoBehaviour
             Log("选中的卡牌已不存在");
             if (playerPanels[currentTurnIndex] != null)
                 playerPanels[currentTurnIndex].ClearSelectedCardInPanel();
+            selectedCardForPlace = null;
             return;
         }
 
@@ -495,6 +507,8 @@ public class GameManager : MonoBehaviour
 
         if (playerPanels[currentTurnIndex] != null)
             playerPanels[currentTurnIndex].ClearSelectedCardInPanel();
+
+        selectedCardForPlace = null;
 
         UpdateAllUI();
 
@@ -600,30 +614,39 @@ public class GameManager : MonoBehaviour
         currentTransactionType = wantedType;
         currentTransactionPrice = offerPrice;
 
-        PlayerData seller = players[sellerIndex];
-
         string sellerName = $"玩家{sellerIndex + 1}";
         string buyerName = $"玩家{currentTurnIndex + 1}";
         string goodsName = GetCardTypeName(wantedType);
 
-        sellerDialogText.text = $"{sellerName}，\n" +
-                                $"{buyerName}想以{offerPrice}金币的价格\n" +
-                                $"向您购买【{goodsName}】\n\n" +
-                                $"是否接受此交易？\n\n" +
-                                $"(提示：您可以选择拒绝来隐藏手牌信息)";
+        if (sellerDialogText != null)
+        {
+            sellerDialogText.text = $"{sellerName}，\n" +
+                                    $"{buyerName}想以{offerPrice}金币的价格\n" +
+                                    $"向您购买【{goodsName}】\n\n" +
+                                    $"是否接受此交易？\n\n" +
+                                    $"(提示：您可以选择拒绝来隐藏手牌信息)";
+        }
 
-        sellerDialogPanel.SetActive(true);
+        if (sellerDialogPanel != null)
+            sellerDialogPanel.SetActive(true);
 
-        acceptButton.onClick.RemoveAllListeners();
-        acceptButton.onClick.AddListener(() => OnSellerResponse(true));
+        if (acceptButton != null)
+        {
+            acceptButton.onClick.RemoveAllListeners();
+            acceptButton.onClick.AddListener(() => OnSellerResponse(true));
+        }
 
-        rejectButton.onClick.RemoveAllListeners();
-        rejectButton.onClick.AddListener(() => OnSellerResponse(false));
+        if (rejectButton != null)
+        {
+            rejectButton.onClick.RemoveAllListeners();
+            rejectButton.onClick.AddListener(() => OnSellerResponse(false));
+        }
     }
 
     private void OnSellerResponse(bool accepted)
     {
-        sellerDialogPanel.SetActive(false);
+        if (sellerDialogPanel != null)
+            sellerDialogPanel.SetActive(false);
 
         if (accepted)
         {
@@ -688,22 +711,33 @@ public class GameManager : MonoBehaviour
         string cardName = GetCardName(card);
         int inspectPrice = Mathf.CeilToInt(price * 0.5f);
 
-        inspectDialogText.text = $"您购买了{cardName}\n\n是否花费{inspectPrice}金币进行验货？\n\n" +
-                                 $"验货后如果是真货，买家多付{inspectPrice}金币\n" +
-                                 $"如果是假货，卖家退还{price}金币并赔偿{inspectPrice}金币";
+        if (inspectDialogText != null)
+        {
+            inspectDialogText.text = $"您购买了{cardName}\n\n是否花费{inspectPrice}金币进行验货？\n\n" +
+                                     $"验货后如果是真货，买家多付{inspectPrice}金币\n" +
+                                     $"如果是假货，卖家退还{price}金币并赔偿{inspectPrice}金币";
+        }
 
-        inspectDialogPanel.SetActive(true);
+        if (inspectDialogPanel != null)
+            inspectDialogPanel.SetActive(true);
 
-        inspectButton.onClick.RemoveAllListeners();
-        inspectButton.onClick.AddListener(() => OnInspectChoice(true));
+        if (inspectButton != null)
+        {
+            inspectButton.onClick.RemoveAllListeners();
+            inspectButton.onClick.AddListener(() => OnInspectChoice(true));
+        }
 
-        noInspectButton.onClick.RemoveAllListeners();
-        noInspectButton.onClick.AddListener(() => OnInspectChoice(false));
+        if (noInspectButton != null)
+        {
+            noInspectButton.onClick.RemoveAllListeners();
+            noInspectButton.onClick.AddListener(() => OnInspectChoice(false));
+        }
     }
 
     private void OnInspectChoice(bool inspect)
     {
-        inspectDialogPanel.SetActive(false);
+        if (inspectDialogPanel != null)
+            inspectDialogPanel.SetActive(false);
 
         if (inspect)
         {
@@ -715,10 +749,12 @@ public class GameManager : MonoBehaviour
             Log($"玩家{currentTransactionBuyerIndex + 1}选择不验货");
         }
 
-        currentTransactionBuyer.hasBoughtThisTurn = true;
+        if (currentTransactionBuyer != null)
+            currentTransactionBuyer.hasBoughtThisTurn = true;
+
         UpdateAllUI();
 
-        if (currentTransactionBuyer.hasPlacedThisTurn && currentTransactionBuyer.hasBoughtThisTurn)
+        if (currentTransactionBuyer != null && currentTransactionBuyer.hasPlacedThisTurn && currentTransactionBuyer.hasBoughtThisTurn)
         {
             EndTurn();
         }
