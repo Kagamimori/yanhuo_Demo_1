@@ -302,12 +302,13 @@ public class GameManager : MonoBehaviour
     {
         if (currentState != GameState.Phase1_Sell) return;
 
-        if (sellCardPanel != null)
+        // 调用Panel的出售选中卡牌方法
+        if (Panel.Instance != null)
         {
-            RefreshSellCardPanel();
-            sellCardPanel.SetActive(true);
+            Panel.Instance.ExecuteSellSelectedCard();
         }
     }
+    #endregion
 
     private void RefreshSellCardPanel()
     {
@@ -388,7 +389,7 @@ public class GameManager : MonoBehaviour
         if (sellCardPanel != null)
             sellCardPanel.SetActive(false);
     }
-    #endregion
+    
 
     #region 阶段2：明牌/替换
     private void OnPlaceCardButtonClicked()
@@ -444,6 +445,9 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 明牌区槽位被选中时的处理
+    /// </summary>
     public void OnPlaceCardSelected(int slotIndex)
     {
         if (currentState != GameState.Phase2_Action)
@@ -469,9 +473,11 @@ public class GameManager : MonoBehaviour
         if (!currentPlayer.handCards.Contains(selectedCardForPlace))
         {
             Log("选中的卡牌已不存在");
-            if (playerPanels[currentTurnIndex] != null)
-                playerPanels[currentTurnIndex].ClearSelectedCardInPanel();
             selectedCardForPlace = null;
+            if (Panel.Instance != null)
+            {
+                Panel.Instance.ClearAllSelectedCards();
+            }
             return;
         }
 
@@ -484,6 +490,10 @@ public class GameManager : MonoBehaviour
         ExecutePlaceCard(slotIndex);
     }
 
+
+    /// <summary>
+    /// 执行明牌/替换操作
+    /// </summary>
     private void ExecutePlaceCard(int slotIndex)
     {
         PlayerData currentPlayer = players[currentTurnIndex];
@@ -491,6 +501,7 @@ public class GameManager : MonoBehaviour
 
         if (targetSlotCard != null)
         {
+            // 替换：将原明牌区的卡牌移回手牌，新牌放入明牌区
             currentPlayer.handCards.Remove(selectedCardForPlace);
             currentPlayer.handCards.Add(targetSlotCard);
             currentPlayer.openCards[slotIndex] = selectedCardForPlace;
@@ -498,17 +509,22 @@ public class GameManager : MonoBehaviour
         }
         else
         {
+            // 明牌：直接将手牌放入空的明牌区槽位
             currentPlayer.handCards.Remove(selectedCardForPlace);
             currentPlayer.openCards[slotIndex] = selectedCardForPlace;
             Log($"玩家{currentTurnIndex + 1}在明牌区{slotIndex + 1}号位放置了{GetCardName(selectedCardForPlace)}");
         }
 
         currentPlayer.hasPlacedThisTurn = true;
-
-        if (playerPanels[currentTurnIndex] != null)
-            playerPanels[currentTurnIndex].ClearSelectedCardInPanel();
-
         selectedCardForPlace = null;
+
+        // 清除选中状态
+        if (Panel.Instance != null)
+        {
+            Panel.Instance.ClearAllSelectedCards();
+            // 刷新所有UI，其他玩家现在可以看到更新后的明牌区
+            Panel.Instance.UpdateAllPlayersUI();
+        }
 
         UpdateAllUI();
 
@@ -518,6 +534,10 @@ public class GameManager : MonoBehaviour
         }
     }
 
+
+    /// <summary>
+    /// 选择卡牌用于明牌
+    /// </summary>
     public void SelectCardForPlace(CardData card, int handIndex)
     {
         if (currentState != GameState.Phase2_Action) return;
@@ -538,7 +558,13 @@ public class GameManager : MonoBehaviour
 
         selectedCardForPlace = card;
         selectedHandCardIndex = handIndex;
-        Log($"已选中{GetCardName(card)}，请点击明牌区槽位");
+        Log($"已选中{GetCardName(card)}，请点击明牌区空位");
+
+        // 刷新主面板显示，高亮选中的卡牌
+        if (Panel.Instance != null)
+        {
+            Panel.Instance.UpdateAllPlayersUI();
+        }
     }
     #endregion
 
@@ -847,8 +873,18 @@ public class GameManager : MonoBehaviour
     #endregion
 
     #region UI更新
+    /// <summary>
+    /// 刷新所有UI
+    /// </summary>
     private void UpdateAllUI()
     {
+        // 更新主面板
+        if (Panel.Instance != null)
+        {
+            Panel.Instance.UpdateAllPlayersUI();
+        }
+
+        // 更新玩家详情面板
         foreach (var playerPanel in playerPanels)
         {
             if (playerPanel != null)

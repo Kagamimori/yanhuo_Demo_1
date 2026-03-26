@@ -1,14 +1,14 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
-using TMPro;  // 添加这个
+using TMPro;
 
 public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
 {
     [Header("UI组件引用")]
     public Image cardBackground;
-    public TMP_Text cardNameText;      // 改为 TMP_Text
-    public TMP_Text cardTypeText;      // 改为 TMP_Text
+    public TMP_Text cardNameText;
+    public TMP_Text cardTypeText;
     public Image qualityIcon;
 
     [Header("颜色配置")]
@@ -16,6 +16,7 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
     public Color fakeCardColor = new Color(0.85f, 0.7f, 0.7f);
     public Color selectedColor = new Color(0.7f, 0.85f, 0.9f);
     public Color emptyColor = new Color(0.5f, 0.5f, 0.5f, 0.5f);
+    public Color disabledColor = new Color(0.6f, 0.6f, 0.6f, 0.5f);
 
     [Header("图标配置")]
     public Sprite realIcon;
@@ -23,14 +24,27 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
 
     private CardData cardData;
     private bool isSelected = false;
+    private bool isInteractable = true;
+    private Button button;
 
     public System.Action<CardUI> OnCardClick;
     public System.Action<CardUI> OnCardHover;
+
+    void Awake()
+    {
+        button = GetComponent<Button>();
+        if (button == null)
+        {
+            button = gameObject.AddComponent<Button>();
+        }
+        button.transition = Selectable.Transition.ColorTint;
+    }
 
     public void SetCardData(CardData data)
     {
         cardData = data;
         UpdateUI();
+        UpdateInteractable();
     }
 
     public void SetEmpty()
@@ -44,6 +58,39 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
             cardBackground.color = emptyColor;
         if (qualityIcon != null)
             qualityIcon.gameObject.SetActive(false);
+        UpdateInteractable();
+    }
+
+    /// <summary>
+    /// 设置卡牌是否可交互
+    /// </summary>
+    public void SetInteractable(bool interactable)
+    {
+        isInteractable = interactable;
+        UpdateInteractable();
+    }
+
+    private void UpdateInteractable()
+    {
+        if (button != null)
+        {
+            button.interactable = isInteractable;
+        }
+
+        if (!isInteractable && cardBackground != null)
+        {
+            Color color = cardBackground.color;
+            color.a = 0.6f;
+            cardBackground.color = color;
+        }
+        else if (isInteractable && cardData != null)
+        {
+            cardBackground.color = cardData.quality == CardData.CardQuality.Real ? realCardColor : fakeCardColor;
+        }
+        else if (isInteractable && cardData == null)
+        {
+            cardBackground.color = emptyColor;
+        }
     }
 
     private void UpdateUI()
@@ -76,7 +123,6 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
     private string GetCardTypeName()
     {
         if (cardData == null) return "";
-
         switch (cardData.type)
         {
             case CardData.CardType.Sugar: return "糖";
@@ -114,7 +160,7 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (OnCardClick != null)
+        if (isInteractable && OnCardClick != null)
         {
             OnCardClick(this);
         }
@@ -126,7 +172,10 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
         {
             OnCardHover(this);
         }
-        transform.localScale = Vector3.one * 1.05f;
+        if (isInteractable)
+        {
+            transform.localScale = Vector3.one * 1.05f;
+        }
     }
 
     public void OnPointerExit(PointerEventData eventData)
