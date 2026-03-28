@@ -4,23 +4,27 @@ using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using LitJson;
+using System.IO;
 
 public class GameManager : MonoBehaviour
 {
 
     public static GameManager Instance { get; private set; }
+    public static GameConfig Config { get; private set; }
 
+    // 原来的字段大部分改为从配置读取，部分保留用于运行时修改（但初始值从配置加载）
     public List<PlayerData> players = new List<PlayerData>();
     public int currentTurnIndex = 0;
-    public int localPlayerIndex = 0;   // 假设本地玩家索引0（可修改）
     public GameState currentState = GameState.GameStart;
-
     public Dictionary<CardData.CardType, int> bankStock = new Dictionary<CardData.CardType, int>();
 
     private List<CardData> realCardPool = new List<CardData>();
     private List<CardData> fakeCardPool = new List<CardData>();
-    private const int REAL_SUGAR_COUNT = 18, REAL_OIL_COUNT = 18, REAL_FLOUR_COUNT = 18;
-    private const int FAKE_SUGAR_COUNT = 12, FAKE_OIL_COUNT = 12, FAKE_FLOUR_COUNT = 12;
+
+    // 移除硬编码常量，改为从配置读取
+    private int REAL_SUGAR_COUNT, REAL_OIL_COUNT, REAL_FLOUR_COUNT;
+    private int FAKE_SUGAR_COUNT, FAKE_OIL_COUNT, FAKE_FLOUR_COUNT;
     private GameObject cardPrefab;
     [Header("UI引用")]
                 // 当前玩家的详情面板
@@ -58,7 +62,11 @@ public class GameManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
+
+        // 加载配置文件
+        LoadConfig();
     }
+    
     //
     private bool isInitialized = false;
     void Start()
@@ -105,69 +113,63 @@ public class GameManager : MonoBehaviour
 
     void InitializeGame()
     {
-        //
-        // 清空现有玩家列表，防止重复添加
         players.Clear();
-        GenerateCardPools();
-        for (int i = 0; i < 3; i++)
+        GenerateCardPools(); // 现在根据配置生成
+        for (int i = 0; i < Config.playerCount; i++)
         {
             PlayerData p = new PlayerData();
             p.playerIndex = i;
-            p.gold = 12;
+            p.gold = Config.initialGold;  // 使用配置中的初始金币
             p.handCards = new List<CardData>();
             p.openCards = new List<CardData>();
-            for (int j = 0; j < 9; j++)
+            for (int j = 0; j < Config.openCardSlotCount; j++)
                 p.openCards.Add(null);
             p.hasSoldThisTurn = false;
             p.hasPlacedThisTurn = false;
             p.hasBoughtThisTurn = false;
             p.rejectedBuyers = new List<int>();
 
-            // 添加手牌：4张真货 + 4张假货
-            for (int t = 0; t < 4; t++)
+            // 添加初始手牌
+            for (int t = 0; t < Config.initialRealCardsPerPlayer; t++)
             {
                 CardData realCard = DrawRandomCard(true);
-                CardData fakeCard = DrawRandomCard(false);
-
                 if (realCard != null) p.handCards.Add(realCard);
+            }
+            for (int t = 0; t < Config.initialFakeCardsPerPlayer; t++)
+            {
+                CardData fakeCard = DrawRandomCard(false);
                 if (fakeCard != null) p.handCards.Add(fakeCard);
             }
 
             players.Add(p);
-            
-
         }
-        
-        int fakeIndex = Random.Range(0, 3);
-        for (int i = 0; i < 3; i++)//
-        {
+
+        // 随机设置假货商人
+        int fakeIndex = Random.Range(0, Config.playerCount);
+        for (int i = 0; i < Config.playerCount; i++)
             players[i].isRealMerchant = (i != fakeIndex);
-            Debug.Log($"玩家{i} 身份: {(players[i].isRealMerchant ? "真商" : "假商")}");
-        }
-        
-        bankStock = new Dictionary<CardData.CardType, int>();
 
-        bankStock[CardData.CardType.Sugar] = 2;
-        bankStock[CardData.CardType.Oil] = 2;
-        bankStock[CardData.CardType.Flour] = 2;
+        // 初始化银行库存
+        bankStock.Clear();
+        bankStock[CardData.CardType.Sugar] = Config.bankInitialStock["Sugar"];
+        bankStock[CardData.CardType.Oil] = Config.bankInitialStock["Oil"];
+        bankStock[CardData.CardType.Flour] = Config.bankInitialStock["Flour"];
 
-        currentTurnIndex = Random.Range(0, 3);
-        Debug.Log($"起始玩家: 玩家{currentTurnIndex + 1}");
+        currentTurnIndex = Random.Range(0, Config.playerCount);
         StartTurn();
     }
 
     void StartTurn()
     {
-        
+
         PlayerData cur = players[currentTurnIndex];
         cur.hasSoldThisTurn = cur.hasPlacedThisTurn = cur.hasBoughtThisTurn = false;
-        cur.hasBankPurchaseFailed = false;  // 重置银行购买失败标记
+        cur.hasBankPurchaseFailed = false;
         cur.rejectedBuyers.Clear();
-        //
-        //Debug.Log($"玩家手牌数量: {cur.handCards.Count}");
 
-        int goldToAdd = 4;
-        if (IsGoldLeader(cur)) goldToAdd -= 2;
+        // 使用配置中的基础金币和领先者惩罚
+        int goldToAdd = Config.turnBaseGold;
+        if (IsGoldLeader(cur)) goldToAdd -= Config.goldLeaderPenalty;
         cur.gold += goldToAdd;
 
         currentState = GameState.Phase1_Sell;
@@ -181,14 +183,12 @@ public class GameManager : MonoBehaviour
         {
             Debug.LogError("Panel.Instance 为空！");
         }
-        Panel.Instance.UpdateCurrentPlayerUI();
+        Panel.Instance?.UpdateCurrentPlayerUI();
         UpdateAllUI();
         Panel.Instance.AddCue($"你的回合开始，请选择是否出售真牌");
         Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合开始，获得{goldToAdd}金币，当前金币{cur.gold}");
         Panel.Instance.AddLog($"阶段1：可以出售真牌");
         Panel.Instance?.ShowCurrentPlayerOpenCards();
-        
-        
     }
 
     public void SkipToPhase2()
@@ -207,10 +207,10 @@ public class GameManager : MonoBehaviour
     #region 牌池管理
     private void GenerateCardPools()
     {
-        
         realCardPool.Clear();
         fakeCardPool.Clear();
 
+        // 使用配置中的数量
         for (int i = 0; i < REAL_SUGAR_COUNT; i++)
             realCardPool.Add(new CardData(CardData.CardType.Sugar, CardData.CardQuality.Real));
         for (int i = 0; i < REAL_OIL_COUNT; i++)
@@ -224,9 +224,6 @@ public class GameManager : MonoBehaviour
             fakeCardPool.Add(new CardData(CardData.CardType.Oil, CardData.CardQuality.Fake));
         for (int i = 0; i < FAKE_FLOUR_COUNT; i++)
             fakeCardPool.Add(new CardData(CardData.CardType.Flour, CardData.CardQuality.Fake));
-
-        //
-        //Debug.Log($"真货牌池数量: {realCardPool.Count}, 假货牌池数量: {fakeCardPool.Count}");
 
         ShuffleCardPool(realCardPool);
         ShuffleCardPool(fakeCardPool);
@@ -242,6 +239,30 @@ public class GameManager : MonoBehaviour
             pool[randomIndex] = temp;
         }
     }
+    void LoadConfig()
+    {
+        TextAsset configFile = Resources.Load<TextAsset>("game_config");
+        if (configFile != null)
+        {
+            Config = JsonMapper.ToObject<GameConfig>(configFile.text);
+            Debug.Log("游戏配置加载成功");
+        }
+        else
+        {
+            Debug.LogError("未找到 game_config.json，使用默认值");
+            Config = new GameConfig();
+        }
+
+        // 将配置中的数量赋值给局部变量
+        REAL_SUGAR_COUNT = Config.realSugarCount;
+        REAL_OIL_COUNT = Config.realOilCount;
+        REAL_FLOUR_COUNT = Config.realFlourCount;
+        FAKE_SUGAR_COUNT = Config.fakeSugarCount;
+        FAKE_OIL_COUNT = Config.fakeOilCount;
+        FAKE_FLOUR_COUNT = Config.fakeFlourCount;
+    }
+
+    
 
     private CardData DrawRandomCard(bool isReal)
     {
@@ -283,27 +304,49 @@ public class GameManager : MonoBehaviour
     public void OnSellRealCard(CardData card)
     {
         PlayerData cur = players[currentTurnIndex];
-        if (currentState != GameState.Phase1_Sell || cur.hasSoldThisTurn)
-        {
-            Panel.Instance.AddCue("已售出或不在售出阶段");
-            return;
-        }
-        if (card.quality != CardData.CardQuality.Real)
-        {
-            Panel.Instance.AddCue("只能出售真牌");
-            return;
-        }
+        if (currentState != GameState.Phase1_Sell || cur.hasSoldThisTurn) return;
+        if (card.quality != CardData.CardQuality.Real) return;
+
         cur.handCards.Remove(card);
-        cur.gold += 8;
+        cur.gold += Config.sellRealCardReward;  // 使用配置的出售收益
         cur.hasSoldThisTurn = true;
         bankStock[card.type]++;
         UpdateAllUI();
-        Panel.Instance.AddLog($"出售了一张{GetCardName(card)}，获得8金币");
-
-        Panel.Instance?.AddCue("出售成功，点击「Next」按钮进入下一阶段");
-
-        // 出售后禁用 Sell 按钮
+        Panel.Instance.AddLog($"出售了一张{GetCardName(card)}，获得{Config.sellRealCardReward}金币");
+        Panel.Instance.AddCue("出售成功，点击「Next」按钮进入下一阶段");
         EnablePhase1Buttons(false);
+    }
+
+    void BuyFromBank(CardData.CardType type, int offerPrice)
+    {
+        PlayerData buyer = players[currentTurnIndex];
+        int actualPrice = IsGoldLeader(buyer) ? Config.bankPriceLeader : Config.bankPriceNormal;
+
+        if (bankStock[type] <= 0)
+        {
+            Panel.Instance.AddCue("银行没有该货物");
+            buyer.hasBankPurchaseFailed = true;
+            Panel.Instance.OnBankBuyFailed();
+            return;
+        }
+
+        if (buyer.gold < actualPrice)
+        {
+            Panel.Instance.AddCue($"金币不足，需要{actualPrice}金币");
+            buyer.hasBankPurchaseFailed = true;
+            Panel.Instance.OnBankBuyFailed();
+            return;
+        }
+
+        buyer.gold -= actualPrice;
+        bankStock[type]--;
+        buyer.handCards.Add(new CardData(type, CardData.CardQuality.Real));
+        buyer.hasBoughtThisTurn = true;
+        buyer.hasBankPurchaseFailed = false;
+
+        UpdateAllUI();
+        Panel.Instance.AddLog($"从银行购买了{GetCardTypeName(type)}，花费{actualPrice}金币");
+        Panel.Instance.OnBuyComplete();
     }
 
     public void SelectCardForPlace(CardData card, int handIndex) { } // 由Panel管理
@@ -330,42 +373,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void BuyFromBank(CardData.CardType type, int offerPrice)
-    {
-        PlayerData buyer = players[currentTurnIndex];
-        int actualPrice = IsGoldLeader(buyer) ? 18 : 12;
-
-        // 检查银行是否有货
-        if (bankStock[type] <= 0)
-        {
-            Panel.Instance.AddCue("银行没有该货物");
-            buyer.hasBankPurchaseFailed = true;
-            Panel.Instance.OnBankBuyFailed();  // 通知失败，会关闭银行面板并重新打开选择面板
-            return;
-        }
-
-        // 检查金币是否足够
-        if (buyer.gold < actualPrice)
-        {
-            Panel.Instance.AddCue($"金币不足，需要{actualPrice}金币");
-            buyer.hasBankPurchaseFailed = true;
-            Panel.Instance.OnBankBuyFailed();  // 通知失败，会关闭银行面板并重新打开选择面板
-            return;
-        }
-
-        // 购买成功
-        buyer.gold -= actualPrice;
-        bankStock[type]--;
-        buyer.handCards.Add(new CardData(type, CardData.CardQuality.Real));
-        buyer.hasBoughtThisTurn = true;
-        buyer.hasBankPurchaseFailed = false;
-
-        UpdateAllUI();
-        Panel.Instance.AddLog($"从银行购买了{GetCardTypeName(type)}，花费{actualPrice}金币");
-
-        // 购买成功，关闭银行面板并通知完成
-        Panel.Instance.OnBuyComplete();
-    }
+   
 
     private void ShowSellerDialog(int sellerIndex, CardData.CardType wantedType, int offerPrice)
     {
@@ -768,7 +776,8 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        int extra = Mathf.CeilToInt(price * 0.5f);
+        // 使用配置中的验货费比例
+        int extra = Mathf.CeilToInt(price * Config.inspectFeeRatio);
 
         Panel.Instance?.AddLog($"=== 验货处理 ===");
         Panel.Instance?.AddLog($"买家{buyer.playerIndex + 1}金币: {buyer.gold}");
@@ -776,6 +785,7 @@ public class GameManager : MonoBehaviour
 
         if (isReal)
         {
+            // 真货：买家多付 extra 金币给卖家
             Panel.Instance?.AddLog($"验货：真货，买家需多付{extra}金币");
 
             if (buyer.gold >= extra)
@@ -787,11 +797,13 @@ public class GameManager : MonoBehaviour
             else
             {
                 Panel.Instance?.AddCue($"买家金币不足，需要{extra}金币，当前{buyer.gold}金币");
+                // 处理买家金币不足：扣真牌，获得抵押金币，然后支付
                 HandleInsufficientGold(buyer, extra, seller, extra);
             }
         }
         else
         {
+            // 假货：卖家退还 price + 赔偿 extra 给买家
             int totalRefund = price + extra;
             Panel.Instance?.AddLog($"验货：假货，卖家需退还{price}并赔偿{extra}金币，共{totalRefund}金币");
 
@@ -804,6 +816,7 @@ public class GameManager : MonoBehaviour
             else
             {
                 Panel.Instance?.AddCue($"卖家金币不足，需要退还{totalRefund}金币，当前{seller.gold}金币");
+                // 处理卖家金币不足：扣真牌，获得抵押金币，然后支付
                 HandleInsufficientGold(seller, totalRefund, buyer, totalRefund);
             }
         }
@@ -830,18 +843,22 @@ public class GameManager : MonoBehaviour
             return false;
         }
 
-        // 扣除一张真牌（不获得金币）
+        // 扣除一张真牌（使用配置中的抵押获得金币）
         player.handCards.Remove(realCard);
+        player.gold += Config.mortgageGain;  // 使用配置的抵押收益
         bankStock[realCard.type]++;
-        Panel.Instance?.AddLog($"玩家{player.playerIndex + 1}因金币不足，被强制扣除一张{GetCardName(realCard)}");
-        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}被强制扣除一张{GetCardName(realCard)}");
+        Panel.Instance?.AddLog($"玩家{player.playerIndex + 1}因金币不足，被强制扣除一张{GetCardName(realCard)}，获得{Config.mortgageGain}金币");
+        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}被强制扣除一张{GetCardName(realCard)}，获得{Config.mortgageGain}金币");
 
-        // 记录扣除前的金币
-        int oldGold = player.gold;
+        // 检查是否还需要继续抵押
+        if (player.gold < requiredGold)
+        {
+            // 递归调用继续抵押
+            return HandleInsufficientGold(player, requiredGold, receiver, amountToGive);
+        }
 
-        // 金币清零
-        player.gold = 0;
-        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}金币从{oldGold}清零");
+        // 支付所需金币
+        player.gold -= requiredGold;
 
         // 接收方获得应得金币
         if (receiver != null && amountToGive > 0)
@@ -1005,7 +1022,7 @@ public class GameManager : MonoBehaviour
         int sugar = openCards.Count(c => c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Real);
         int oil = openCards.Count(c => c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Real);
         int flour = openCards.Count(c => c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Real);
-        return sugar == 3 && oil == 3 && flour == 3;
+        return sugar == Config.realWinRequired && oil == Config.realWinRequired && flour == Config.realWinRequired;
     }
 
     bool CheckFakeWin(List<CardData> openCards)
@@ -1013,17 +1030,12 @@ public class GameManager : MonoBehaviour
         int sugar = openCards.Count(c => c != null && c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Fake);
         int oil = openCards.Count(c => c != null && c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Fake);
         int flour = openCards.Count(c => c != null && c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Fake);
-
         int total = sugar + oil + flour;
-        if (total < 7) return false;  // 至少需要7张假牌
+        if (total < Config.fakeWinTotal) return false;
 
-        // 检查是否满足：有一种牌数量 >= 3，另外两种牌数量 >= 2
         List<int> counts = new List<int> { sugar, oil, flour };
-        counts.Sort();  // 从小到大排序
-
-        // 排序后，counts[0] <= counts[1] <= counts[2]
-        // 条件：最大的 >= 3，第二大的 >= 2
-        return counts[2] >= 3 && counts[1] >= 2;
+        counts.Sort();
+        return counts[2] >= Config.fakeWinMinMajor && counts[1] >= Config.fakeWinMid;
     }
 
     string GetCardName(CardData c) => $"{GetCardTypeName(c.type)}{(c.quality == CardData.CardQuality.Real ? "真" : "假")}";

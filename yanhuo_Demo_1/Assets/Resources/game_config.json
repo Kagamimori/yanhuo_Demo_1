@@ -1,0 +1,31 @@
+{
+  "playerCount": 3,
+  "initialGold": 12,
+  "turnBaseGold": 4,
+  "goldLeaderPenalty": 2,
+  "sellRealCardReward": 8,
+  "mortgageGain": 8,
+  "bankPriceNormal": 12,
+  "bankPriceLeader": 18,
+  "bankInitialStock": {
+    "Sugar": 2,
+    "Oil": 2,
+    "Flour": 2
+  },
+  "realSugarCount": 18,
+  "realOilCount": 18,
+  "realFlourCount": 18,
+  "fakeSugarCount": 12,
+  "fakeOilCount": 12,
+  "fakeFlourCount": 12,
+  "initialRealCardsPerPlayer": 4,
+  "initialFakeCardsPerPlayer": 4,
+  "openCardSlotCount": 9,
+  "inspectFeeRatio": 0.5,
+  "defaultPlayerBuyPrice": 10,
+  "realWinRequired": 3,
+  "fakeWinTotal": 7,
+  "fakeWinMinMajor": 3,
+  "fakeWinMid": 2,
+  "cueTextDuration": 0.8
+}

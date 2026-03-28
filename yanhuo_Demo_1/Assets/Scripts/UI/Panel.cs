@@ -693,6 +693,7 @@ public class Panel : MonoBehaviour
     }
     void ShowBankBuyPanel()
     {
+        playerPriceInput.text = GameManager.Config.defaultPlayerBuyPrice.ToString();
         // 关闭选择面板
         if (buyTargetPanel != null)
             buyTargetPanel.SetActive(false);
@@ -727,28 +728,24 @@ public class Panel : MonoBehaviour
     {
         selectedTargetPlayerIndex = targetPlayerIndex;
 
-        // 关闭选择面板
         if (buyTargetPanel != null)
             buyTargetPanel.SetActive(false);
 
-        // 刷新货物下拉框
         if (playerGoodsDropdown != null)
         {
             playerGoodsDropdown.ClearOptions();
             playerGoodsDropdown.AddOptions(new List<string> { "糖", "油", "面" });
-            playerGoodsDropdown.value = 0;  // 默认选中第一个
+            playerGoodsDropdown.value = 0;
             playerGoodsDropdown.RefreshShownValue();
         }
 
-        // 设置面板标题
         if (playerBuyTargetText != null)
             playerBuyTargetText.text = $"向玩家{targetPlayerIndex + 1}购买";
 
-        // 重置价格输入框
+        // 使用配置中的默认玩家购买价格
         if (playerPriceInput != null)
-            playerPriceInput.text = "10";
+            playerPriceInput.text = GameManager.Config.defaultPlayerBuyPrice.ToString();
 
-        // 打开玩家购买面板
         if (playerBuyPanel != null)
             playerBuyPanel.SetActive(true);
     }
@@ -890,17 +887,6 @@ public class Panel : MonoBehaviour
         }
     }
 
-    public void AddCue(string msg)
-    {
-        if (cueText != null)
-        {
-            if (clearCueCoroutine != null) StopCoroutine(clearCueCoroutine);
-            cueText.text = msg;
-            clearCueCoroutine = StartCoroutine(ClearCueAfterDelay(0.8f));
-        }
-        AddLog(msg);
-    }
-
     IEnumerator ClearCueAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
@@ -922,5 +908,15 @@ public class Panel : MonoBehaviour
     public void UpdateGameState(string state)
     {
         if (gameStateText != null) gameStateText.text = state;
+    }
+    public void AddCue(string msg)
+    {
+        if (cueText != null)
+        {
+            if (clearCueCoroutine != null) StopCoroutine(clearCueCoroutine);
+            cueText.text = msg;
+            clearCueCoroutine = StartCoroutine(ClearCueAfterDelay(GameManager.Config.cueTextDuration));
+        }
+        AddLog(msg);
     }
 }
