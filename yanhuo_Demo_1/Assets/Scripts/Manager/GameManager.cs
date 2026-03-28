@@ -7,125 +7,108 @@ using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
+
     public static GameManager Instance { get; private set; }
 
     public List<PlayerData> players = new List<PlayerData>();
     public int currentTurnIndex = 0;
+    public int localPlayerIndex = 0;   // 假设本地玩家索引0（可修改）
     public GameState currentState = GameState.GameStart;
 
-    // 银行数据：真货剩余数量（按类型）
     public Dictionary<CardData.CardType, int> bankStock = new Dictionary<CardData.CardType, int>();
 
-    // 卡池：所有真货和假货的初始牌堆
     private List<CardData> realCardPool = new List<CardData>();
     private List<CardData> fakeCardPool = new List<CardData>();
-    private const int REAL_SUGAR_COUNT = 18;
-    private const int REAL_OIL_COUNT = 18;
-    private const int REAL_FLOUR_COUNT = 18;
-    private const int FAKE_SUGAR_COUNT = 12;
-    private const int FAKE_OIL_COUNT = 12;
-    private const int FAKE_FLOUR_COUNT = 12;
+    private const int REAL_SUGAR_COUNT = 18, REAL_OIL_COUNT = 18, REAL_FLOUR_COUNT = 18;
+    private const int FAKE_SUGAR_COUNT = 12, FAKE_OIL_COUNT = 12, FAKE_FLOUR_COUNT = 12;
+    private GameObject cardPrefab;
+    [Header("UI引用")]
+                // 当前玩家的详情面板
+    public TMP_Text turnText;
+    public TMP_Text stateText;
+    public TMP_Text logText;
 
-    // UI组件引用 - 改为 TMP_Text
-    [Header("阶段1按钮")]
-    public Button sellRealCardButton;
-    public GameObject sellCardPanel;
-
-    [Header("阶段2按钮")]
-    public Button placeCardButton;
-    public Button buyButton;
-    public GameObject placeCardPanel;
-
-    [Header("通用按钮")]
-    public Button endTurnButton;
-
-    [Header("其他UI")]
-    public TMP_Text turnText;          // 改为 TMP_Text
-    public TMP_Text stateText;         // 改为 TMP_Text
-    public TMP_Text logText;           // 改为 TMP_Text
-
-    [Header("玩家面板")]
-    public PlayerPanel[] playerPanels;
-    public GameObject cardPrefab;
-
-    [Header("银行UI组件")]
-    public TMP_Text bankSugarText;     // 改为 TMP_Text
-    public TMP_Text bankOilText;       // 改为 TMP_Text
-    public TMP_Text bankFlourText;     // 改为 TMP_Text
-    public GameObject bankPanel;
-
-    [Header("对话框UI")]
+    [Header("对话框")]
     public GameObject sellerDialogPanel;
-    public TMP_Text sellerDialogText;  // 改为 TMP_Text
-    public Button acceptButton;
-    public Button rejectButton;
-
-    [Header("验货对话框")]
+    public TMP_Text sellerDialogText;
+    public Button acceptButton, rejectButton;
     public GameObject inspectDialogPanel;
-    public TMP_Text inspectDialogText; // 改为 TMP_Text
-    public Button inspectButton;
-    public Button noInspectButton;
+    public TMP_Text inspectDialogText;
+    public Button inspectButton, noInspectButton;
+    public Transform sellerHandCardContainer;
 
-    // 临时存储数据
-    private CardData selectedCardForPlace;
-    private int selectedHandCardIndex = -1;
+    [Header("字体")]
+    public TMP_FontAsset chineseFont;
 
-    // 交易数据
-    private int currentTransactionBuyerIndex;
-    private int currentTransactionSellerIndex;
+    // 交易临时数据
+    private int currentTransactionBuyerIndex, currentTransactionSellerIndex;
     private CardData.CardType currentTransactionType;
     private int currentTransactionPrice;
     private CardData currentTransactionCard;
-    private PlayerData currentTransactionBuyer;
-    private PlayerData currentTransactionSeller;
+    private PlayerData currentTransactionBuyer, currentTransactionSeller;
+    private bool isInInspectFlow = false;
 
+    private int currentTransactionHandIndex = -1;  // 卖家选中的手牌索引
+    private bool isSellerSelecting = false;        // 卖家是否正在选择手牌
+    private CardData pendingTransactionCard;
+    private PlayerData pendingTransactionBuyer;
+    private PlayerData pendingTransactionSeller;
+    private int pendingTransactionPrice;
     void Awake()
     {
-        if (Instance == null)
-        {
-            Instance = this;
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
     }
-
+    //
+    private bool isInitialized = false;
     void Start()
     {
+        //
+        if (isInitialized) return;
+        isInitialized = true;
+        if (Panel.Instance != null)
+            cardPrefab = Panel.Instance.cardPrefab;
         InitializeGame();
-        SetupPlayerPanels();
-        InitializeUI();
+        
+        UpdateAllUI();
+
+        if (chineseFont == null)
+        {
+            Debug.LogError("请将中文字体拖拽到 GameManager 的 chineseFont 字段！");
+            return;
+        }
+
+        TMP_Text[] allTexts = FindObjectsOfType<TMP_Text>(true);
+        foreach (var text in allTexts)
+        {
+            text.font = chineseFont;
+        }
+
+        StartCoroutine(SetFontForNewTexts(chineseFont));
     }
 
-    void InitializeUI()
+    IEnumerator SetFontForNewTexts(TMP_FontAsset font)
     {
-        if (sellerDialogPanel != null)
-            sellerDialogPanel.SetActive(false);
-        if (inspectDialogPanel != null)
-            inspectDialogPanel.SetActive(false);
-        if (sellCardPanel != null)
-            sellCardPanel.SetActive(false);
-        if (placeCardPanel != null)
-            placeCardPanel.SetActive(false);
-
-        if (endTurnButton != null)
-            endTurnButton.onClick.AddListener(OnEndTurnButton);
-
-        if (buyButton != null)
-            buyButton.onClick.AddListener(OnBuyButtonClicked);
-
-        if (placeCardButton != null)
-            placeCardButton.onClick.AddListener(OnPlaceCardButtonClicked);
-
-        if (sellRealCardButton != null)
-            sellRealCardButton.onClick.AddListener(OnSellButtonClicked);
+        while (true)
+        {
+            yield return new WaitForSeconds(0.5f);
+            TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
+            foreach (var text in texts)
+            {
+                if (text.font != font && text.font != null)
+                {
+                    text.font = font;
+                }
+            }
+        }
     }
 
     void InitializeGame()
     {
+        //
+        // 清空现有玩家列表，防止重复添加
+        players.Clear();
         GenerateCardPools();
-
         for (int i = 0; i < 3; i++)
         {
             PlayerData p = new PlayerData();
@@ -140,54 +123,91 @@ public class GameManager : MonoBehaviour
             p.hasBoughtThisTurn = false;
             p.rejectedBuyers = new List<int>();
 
+            // 添加手牌：4张真货 + 4张假货
             for (int t = 0; t < 4; t++)
             {
-                p.handCards.Add(DrawRandomCard(true));
-                p.handCards.Add(DrawRandomCard(false));
-            }
-            players.Add(p);
-        }
+                CardData realCard = DrawRandomCard(true);
+                CardData fakeCard = DrawRandomCard(false);
 
+                if (realCard != null) p.handCards.Add(realCard);
+                if (fakeCard != null) p.handCards.Add(fakeCard);
+            }
+
+            players.Add(p);
+            
+
+        }
+        
         int fakeIndex = Random.Range(0, 3);
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 3; i++)//
         {
             players[i].isRealMerchant = (i != fakeIndex);
+            Debug.Log($"玩家{i} 身份: {(players[i].isRealMerchant ? "真商" : "假商")}");
         }
-
+        
         bankStock = new Dictionary<CardData.CardType, int>();
+
         bankStock[CardData.CardType.Sugar] = 2;
         bankStock[CardData.CardType.Oil] = 2;
         bankStock[CardData.CardType.Flour] = 2;
 
         currentTurnIndex = Random.Range(0, 3);
+        Debug.Log($"起始玩家: 玩家{currentTurnIndex + 1}");
         StartTurn();
     }
 
-    void SetupPlayerPanels()
+    void StartTurn()
     {
-        for (int i = 0; i < players.Count && i < playerPanels.Length; i++)
+        
+        PlayerData cur = players[currentTurnIndex];
+        cur.hasSoldThisTurn = cur.hasPlacedThisTurn = cur.hasBoughtThisTurn = false;
+        cur.hasBankPurchaseFailed = false;  // 重置银行购买失败标记
+        cur.rejectedBuyers.Clear();
+        //
+        //Debug.Log($"玩家手牌数量: {cur.handCards.Count}");
+
+        int goldToAdd = 4;
+        if (IsGoldLeader(cur)) goldToAdd -= 2;
+        cur.gold += goldToAdd;
+
+        currentState = GameState.Phase1_Sell;
+        //
+        // 刷新UI - 重要！
+        if (Panel.Instance != null)
         {
-            int playerIndex = i;
-            if (playerPanels[i] != null)
-            {
-                playerPanels[i].Initialize(i, players[i]);
-
-                playerPanels[i].OnCardSelected = (index, card) =>
-                {
-                    OnPlayerCardSelected(index, card);
-                };
-
-                playerPanels[i].OnOpenSlotSelected = (index, slot) =>
-                {
-                    OnPlayerOpenSlotSelected(index, slot);
-                };
-            }
+            Panel.Instance.UpdateCurrentPlayerUI();
         }
+        else
+        {
+            Debug.LogError("Panel.Instance 为空！");
+        }
+        Panel.Instance.UpdateCurrentPlayerUI();
+        UpdateAllUI();
+        Panel.Instance.AddCue($"你的回合开始，请选择是否出售真牌");
+        Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合开始，获得{goldToAdd}金币，当前金币{cur.gold}");
+        Panel.Instance.AddLog($"阶段1：可以出售真牌");
+        Panel.Instance?.ShowCurrentPlayerOpenCards();
+        
+        
+    }
+
+    public void SkipToPhase2()
+    {
+        if (currentState != GameState.Phase1_Sell) return;
+        currentState = GameState.Phase2_Action;
+        // 更新UI按钮状态
+        EnablePhase1Buttons(false);
+        EnablePhase2Buttons(true);
+
+        UpdateAllUI();
+        Panel.Instance.AddCue("进入阶段2：进行明牌和购买操作");
+        Panel.Instance.AddLog("进入阶段2：可以明牌或购买");
     }
 
     #region 牌池管理
     private void GenerateCardPools()
     {
+        
         realCardPool.Clear();
         fakeCardPool.Clear();
 
@@ -204,6 +224,9 @@ public class GameManager : MonoBehaviour
             fakeCardPool.Add(new CardData(CardData.CardType.Oil, CardData.CardQuality.Fake));
         for (int i = 0; i < FAKE_FLOUR_COUNT; i++)
             fakeCardPool.Add(new CardData(CardData.CardType.Flour, CardData.CardQuality.Fake));
+
+        //
+        //Debug.Log($"真货牌池数量: {realCardPool.Count}, 假货牌池数量: {fakeCardPool.Count}");
 
         ShuffleCardPool(realCardPool);
         ShuffleCardPool(fakeCardPool);
@@ -233,356 +256,64 @@ public class GameManager : MonoBehaviour
         int lastIndex = targetPool.Count - 1;
         CardData drawnCard = targetPool[lastIndex];
         targetPool.RemoveAt(lastIndex);
-
+       
         return drawnCard;
     }
     #endregion
-
-    #region 游戏流程控制
-    void StartTurn()
-    {
-        PlayerData currentPlayer = players[currentTurnIndex];
-
-        currentPlayer.hasSoldThisTurn = false;
-        currentPlayer.hasPlacedThisTurn = false;
-        currentPlayer.hasBoughtThisTurn = false;
-        currentPlayer.rejectedBuyers.Clear();
-
-        int goldToAdd = 4;
-        if (IsGoldLeader(currentPlayer))
-            goldToAdd -= 2;
-        currentPlayer.gold += goldToAdd;
-
-        UpdateAllUI();
-        Log($"玩家{currentTurnIndex + 1}回合开始，获得{goldToAdd}金币，当前金币{currentPlayer.gold}");
-
-        currentState = GameState.Phase1_Sell;
-        EnablePhase1Buttons(true);
-        EnablePhase2Buttons(false);
-
-        if (placeCardPanel != null)
-            placeCardPanel.SetActive(false);
-    }
-
-    void EndTurn()
+    public void EndTurn()
     {
         if (CheckWinCondition())
         {
             currentState = GameState.GameEnd;
-            Log("游戏结束！");
-            if (endTurnButton != null)
-                endTurnButton.interactable = false;
+            Panel.Instance.AddCue("游戏结束！");
             return;
         }
+
+        PlayerData cur = players[currentTurnIndex];
+        Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合结束");
+        string leaderName = $"玩家{players.OrderByDescending(p => p.gold).First().playerIndex + 1}";
+        Panel.Instance.AddLog($"当前金币领先者：{leaderName}");
 
         currentTurnIndex = (currentTurnIndex + 1) % 3;
         StartTurn();
     }
 
-    private void OnEndTurnButton()
-    {
-        if (currentState == GameState.Phase1_Sell || currentState == GameState.Phase2_Action)
-        {
-            EndTurn();
-        }
-    }
-    #endregion
-
-    #region 金币相关
-    public bool IsGoldLeader(PlayerData player)
-    {
-        if (player == null) return false;
-        int maxGold = players.Max(p => p.gold);
-        return player.gold == maxGold;
-    }
-    #endregion
-
-    #region 阶段1：出售真牌
-    private void OnSellButtonClicked()
-    {
-        if (currentState != GameState.Phase1_Sell) return;
-
-        // 调用Panel的出售选中卡牌方法
-        if (Panel.Instance != null)
-        {
-            Panel.Instance.ExecuteSellSelectedCard();
-        }
-    }
-    #endregion
-
-    private void RefreshSellCardPanel()
-    {
-        if (sellCardPanel == null) return;
-
-        PlayerData currentPlayer = players[currentTurnIndex];
-        List<CardData> realCards = currentPlayer.handCards.FindAll(c => c.quality == CardData.CardQuality.Real);
-
-        foreach (Transform child in sellCardPanel.transform)
-        {
-            Destroy(child.gameObject);
-        }
-
-        if (realCards.Count == 0)
-        {
-            // 使用 TMP_Text 创建空提示
-            GameObject emptyTextObj = new GameObject("EmptyText");
-            emptyTextObj.transform.SetParent(sellCardPanel.transform);
-            TMP_Text emptyText = emptyTextObj.AddComponent<TMP_Text>();
-            emptyText.text = "没有可出售的真货";
-            emptyText.color = Color.gray;
-            emptyText.fontSize = 20;
-            emptyText.alignment = TextAlignmentOptions.Center;
-
-            RectTransform rect = emptyTextObj.GetComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(200, 50);
-            return;
-        }
-
-        foreach (CardData card in realCards)
-        {
-            GameObject cardButton = new GameObject($"Card_{card.type}_{card.cardId}");
-            cardButton.transform.SetParent(sellCardPanel.transform);
-
-            RectTransform rect = cardButton.AddComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(100, 40);
-
-            Button btn = cardButton.AddComponent<Button>();
-            TMP_Text btnText = cardButton.AddComponent<TMP_Text>();
-            btnText.text = GetCardName(card);
-            btnText.alignment = TextAlignmentOptions.Center;
-            btnText.fontSize = 16;
-            btnText.color = Color.black;
-
-            btn.onClick.AddListener(() => {
-                OnSellRealCard(card);
-                sellCardPanel.SetActive(false);
-            });
-        }
-    }
+    public bool IsGoldLeader(PlayerData player) => player.gold == players.Max(p => p.gold);
 
     public void OnSellRealCard(CardData card)
     {
-        PlayerData currentPlayer = players[currentTurnIndex];
-        if (currentState != GameState.Phase1_Sell || currentPlayer.hasSoldThisTurn)
+        PlayerData cur = players[currentTurnIndex];
+        if (currentState != GameState.Phase1_Sell || cur.hasSoldThisTurn)
         {
-            Log("当前不能出售真牌");
+            Panel.Instance.AddCue("已售出或不在售出阶段");
             return;
         }
         if (card.quality != CardData.CardQuality.Real)
         {
-            Log("只能出售真牌");
+            Panel.Instance.AddCue("只能出售真牌");
             return;
         }
-
-        currentPlayer.handCards.Remove(card);
-        currentPlayer.gold += 8;
-        currentPlayer.hasSoldThisTurn = true;
+        cur.handCards.Remove(card);
+        cur.gold += 8;
+        cur.hasSoldThisTurn = true;
         bankStock[card.type]++;
-
         UpdateAllUI();
-        Log($"玩家{currentTurnIndex + 1}出售了一张{GetCardName(card)}，获得8金币");
+        Panel.Instance.AddLog($"出售了一张{GetCardName(card)}，获得8金币");
 
+        Panel.Instance?.AddCue("出售成功，点击「Next」按钮进入下一阶段");
+
+        // 出售后禁用 Sell 按钮
         EnablePhase1Buttons(false);
-        currentState = GameState.Phase2_Action;
-        EnablePhase2Buttons(true);
-
-        if (sellCardPanel != null)
-            sellCardPanel.SetActive(false);
-    }
-    
-
-    #region 阶段2：明牌/替换
-    private void OnPlaceCardButtonClicked()
-    {
-        if (currentState != GameState.Phase2_Action) return;
-
-        if (placeCardPanel != null)
-        {
-            RefreshPlaceCardPanel();
-            placeCardPanel.SetActive(true);
-        }
     }
 
-    private void RefreshPlaceCardPanel()
-    {
-        if (placeCardPanel == null) return;
+    public void SelectCardForPlace(CardData card, int handIndex) { } // 由Panel管理
 
-        PlayerData currentPlayer = players[currentTurnIndex];
-
-        foreach (Transform child in placeCardPanel.transform)
-        {
-            Destroy(child.gameObject);
-        }
-
-        for (int i = 0; i < currentPlayer.openCards.Count; i++)
-        {
-            GameObject slot = new GameObject($"OpenSlot_{i}");
-            slot.transform.SetParent(placeCardPanel.transform);
-
-            RectTransform rect = slot.AddComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(100, 100);
-
-            Button btn = slot.AddComponent<Button>();
-            TMP_Text slotText = slot.AddComponent<TMP_Text>();
-            slotText.alignment = TextAlignmentOptions.Center;
-            slotText.fontSize = 14;
-
-            CardData card = currentPlayer.openCards[i];
-            if (card != null)
-            {
-                slotText.text = GetCardName(card);
-            }
-            else
-            {
-                slotText.text = "空位";
-            }
-
-            int slotIndex = i;
-            btn.onClick.AddListener(() => {
-                OnPlaceCardSelected(slotIndex);
-                placeCardPanel.SetActive(false);
-            });
-        }
-    }
-
-    /// <summary>
-    /// 明牌区槽位被选中时的处理
-    /// </summary>
-    public void OnPlaceCardSelected(int slotIndex)
-    {
-        if (currentState != GameState.Phase2_Action)
-        {
-            Log("现在不是明牌阶段");
-            return;
-        }
-
-        PlayerData currentPlayer = players[currentTurnIndex];
-
-        if (currentPlayer.hasPlacedThisTurn)
-        {
-            Log("本回合已经执行过明牌/替换操作");
-            return;
-        }
-
-        if (selectedCardForPlace == null)
-        {
-            Log("请先选择一张手牌");
-            return;
-        }
-
-        if (!currentPlayer.handCards.Contains(selectedCardForPlace))
-        {
-            Log("选中的卡牌已不存在");
-            selectedCardForPlace = null;
-            if (Panel.Instance != null)
-            {
-                Panel.Instance.ClearAllSelectedCards();
-            }
-            return;
-        }
-
-        if (slotIndex < 0 || slotIndex >= currentPlayer.openCards.Count)
-        {
-            Log("无效的槽位");
-            return;
-        }
-
-        ExecutePlaceCard(slotIndex);
-    }
-
-
-    /// <summary>
-    /// 执行明牌/替换操作
-    /// </summary>
-    private void ExecutePlaceCard(int slotIndex)
-    {
-        PlayerData currentPlayer = players[currentTurnIndex];
-        CardData targetSlotCard = currentPlayer.openCards[slotIndex];
-
-        if (targetSlotCard != null)
-        {
-            // 替换：将原明牌区的卡牌移回手牌，新牌放入明牌区
-            currentPlayer.handCards.Remove(selectedCardForPlace);
-            currentPlayer.handCards.Add(targetSlotCard);
-            currentPlayer.openCards[slotIndex] = selectedCardForPlace;
-            Log($"玩家{currentTurnIndex + 1}将明牌区{slotIndex + 1}号位的{GetCardName(targetSlotCard)}替换为{GetCardName(selectedCardForPlace)}");
-        }
-        else
-        {
-            // 明牌：直接将手牌放入空的明牌区槽位
-            currentPlayer.handCards.Remove(selectedCardForPlace);
-            currentPlayer.openCards[slotIndex] = selectedCardForPlace;
-            Log($"玩家{currentTurnIndex + 1}在明牌区{slotIndex + 1}号位放置了{GetCardName(selectedCardForPlace)}");
-        }
-
-        currentPlayer.hasPlacedThisTurn = true;
-        selectedCardForPlace = null;
-
-        // 清除选中状态
-        if (Panel.Instance != null)
-        {
-            Panel.Instance.ClearAllSelectedCards();
-            // 刷新所有UI，其他玩家现在可以看到更新后的明牌区
-            Panel.Instance.UpdateAllPlayersUI();
-        }
-
-        UpdateAllUI();
-
-        if (currentPlayer.hasPlacedThisTurn && currentPlayer.hasBoughtThisTurn)
-        {
-            EndTurn();
-        }
-    }
-
-
-    /// <summary>
-    /// 选择卡牌用于明牌
-    /// </summary>
-    public void SelectCardForPlace(CardData card, int handIndex)
-    {
-        if (currentState != GameState.Phase2_Action) return;
-
-        PlayerData currentPlayer = players[currentTurnIndex];
-
-        if (currentPlayer.hasPlacedThisTurn)
-        {
-            Log("本回合已经执行过明牌操作，不能再明牌");
-            return;
-        }
-
-        if (!currentPlayer.handCards.Contains(card))
-        {
-            Log("卡牌不在手牌中");
-            return;
-        }
-
-        selectedCardForPlace = card;
-        selectedHandCardIndex = handIndex;
-        Log($"已选中{GetCardName(card)}，请点击明牌区空位");
-
-        // 刷新主面板显示，高亮选中的卡牌
-        if (Panel.Instance != null)
-        {
-            Panel.Instance.UpdateAllPlayersUI();
-        }
-    }
-    #endregion
-
-    #region 阶段2：购买
-    private void OnBuyButtonClicked()
-    {
-        if (currentState != GameState.Phase2_Action) return;
-        Log("请通过其他方式发起购买");
-    }
+    public void OnPlaceCardSelected(int slotIndex) { } // 由Panel管理
 
     public void RequestBuy(int targetIndex, CardData.CardType wantedType, int offerPrice)
     {
         PlayerData buyer = players[currentTurnIndex];
-        if (currentState != GameState.Phase2_Action || buyer.hasBoughtThisTurn)
-        {
-            Log("当前不能购买");
-            return;
-        }
+        if (currentState != GameState.Phase2_Action || buyer.hasBoughtThisTurn) return;
 
         if (targetIndex == -1)
         {
@@ -592,45 +323,48 @@ public class GameManager : MonoBehaviour
         {
             if (buyer.rejectedBuyers.Contains(targetIndex))
             {
-                Log("该卖家已拒绝过你，本回合不能再向他购买");
+                Panel.Instance.AddCue("该卖家已拒绝过你，本回合不能再向他购买");
                 return;
             }
             ShowSellerDialog(targetIndex, wantedType, offerPrice);
         }
     }
 
-    void BuyFromBank(CardData.CardType wantedType, int offerPrice)
+    void BuyFromBank(CardData.CardType type, int offerPrice)
     {
         PlayerData buyer = players[currentTurnIndex];
         int actualPrice = IsGoldLeader(buyer) ? 18 : 12;
 
-        if (offerPrice < actualPrice)
+        // 检查银行是否有货
+        if (bankStock[type] <= 0)
         {
-            Log($"银行不接受低于{actualPrice}金币的出价");
+            Panel.Instance.AddCue("银行没有该货物");
+            buyer.hasBankPurchaseFailed = true;
+            Panel.Instance.OnBankBuyFailed();  // 通知失败，会关闭银行面板并重新打开选择面板
             return;
         }
-        if (bankStock[wantedType] <= 0)
-        {
-            Log("银行没有该货物");
-            return;
-        }
+
+        // 检查金币是否足够
         if (buyer.gold < actualPrice)
         {
-            Log($"金币不足，需要{actualPrice}金币");
+            Panel.Instance.AddCue($"金币不足，需要{actualPrice}金币");
+            buyer.hasBankPurchaseFailed = true;
+            Panel.Instance.OnBankBuyFailed();  // 通知失败，会关闭银行面板并重新打开选择面板
             return;
         }
 
+        // 购买成功
         buyer.gold -= actualPrice;
-        bankStock[wantedType]--;
-        CardData newCard = new CardData(wantedType, CardData.CardQuality.Real);
-        buyer.handCards.Add(newCard);
+        bankStock[type]--;
+        buyer.handCards.Add(new CardData(type, CardData.CardQuality.Real));
         buyer.hasBoughtThisTurn = true;
+        buyer.hasBankPurchaseFailed = false;
 
         UpdateAllUI();
-        Log($"玩家{currentTurnIndex + 1}从银行购买了{GetCardTypeName(wantedType)}，花费{actualPrice}金币");
+        Panel.Instance.AddLog($"从银行购买了{GetCardTypeName(type)}，花费{actualPrice}金币");
 
-        if (buyer.hasPlacedThisTurn && buyer.hasBoughtThisTurn)
-            EndTurn();
+        // 购买成功，关闭银行面板并通知完成
+        Panel.Instance.OnBuyComplete();
     }
 
     private void ShowSellerDialog(int sellerIndex, CardData.CardType wantedType, int offerPrice)
@@ -640,48 +374,190 @@ public class GameManager : MonoBehaviour
         currentTransactionType = wantedType;
         currentTransactionPrice = offerPrice;
 
-        string sellerName = $"玩家{sellerIndex + 1}";
-        string buyerName = $"玩家{currentTurnIndex + 1}";
-        string goodsName = GetCardTypeName(wantedType);
+        // 重置选择状态
+        currentTransactionHandIndex = -1;
+        isSellerSelecting = true;
 
+        // 设置对话框标题
         if (sellerDialogText != null)
         {
-            sellerDialogText.text = $"{sellerName}，\n" +
-                                    $"{buyerName}想以{offerPrice}金币的价格\n" +
-                                    $"向您购买【{goodsName}】\n\n" +
-                                    $"是否接受此交易？\n\n" +
-                                    $"(提示：您可以选择拒绝来隐藏手牌信息)";
+            sellerDialogText.text = $"玩家{sellerIndex + 1}，\n" +
+                                    $"玩家{currentTurnIndex + 1}想以{offerPrice}金币的价格\n" +
+                                    $"向您购买【{GetCardTypeName(wantedType)}】\n\n" +
+                                    $"请点击手牌选择要出售的{GetCardTypeName(wantedType)}";
         }
 
-        if (sellerDialogPanel != null)
-            sellerDialogPanel.SetActive(true);
+        // 刷新卖家的手牌显示
+        RefreshSellerHandCards(sellerIndex, wantedType);
 
+        // 设置按钮文本和事件
         if (acceptButton != null)
         {
+            acceptButton.GetComponentInChildren<TMP_Text>().text = "Confirm";
             acceptButton.onClick.RemoveAllListeners();
-            acceptButton.onClick.AddListener(() => OnSellerResponse(true));
+            acceptButton.onClick.AddListener(() => OnSellerConfirm());
+            acceptButton.interactable = false;  // 初始禁用，直到选中卡牌
         }
 
         if (rejectButton != null)
         {
+            rejectButton.GetComponentInChildren<TMP_Text>().text = "Refuse";
             rejectButton.onClick.RemoveAllListeners();
             rejectButton.onClick.AddListener(() => OnSellerResponse(false));
         }
+
+        if (sellerDialogPanel != null)
+            sellerDialogPanel.SetActive(true);
     }
+    private void RefreshSellerHandCards(int sellerIndex, CardData.CardType wantedType)
+    {
+        // 使用专门的容器
+        if (sellerHandCardContainer == null)
+        {
+            Debug.LogError("sellerHandCardContainer 未赋值！请在 Inspector 中拖拽 SellerDialogPanel 下的 HandCardContainer");
+            return;
+        }
+
+        // 清空容器
+        foreach (Transform child in sellerHandCardContainer)
+            Destroy(child.gameObject);
+
+        PlayerData seller = players[sellerIndex];
+
+        // 只显示符合购买类型的卡牌
+        List<CardData> availableCards = seller.handCards.FindAll(c => c.type == wantedType);
+
+        if (availableCards.Count == 0)
+        {
+            TMP_Text emptyText = CreateEmptyText(sellerHandCardContainer, "没有可出售的该类型货物");
+            return;
+        }
+
+        // 创建卡牌按钮
+        for (int i = 0; i < availableCards.Count; i++)
+        {
+            CardData card = availableCards[i];
+            int cardIndex = i;
+
+            // 使用 Panel 中的 cardPrefab
+            GameObject cardObj = Instantiate(Panel.Instance.cardPrefab, sellerHandCardContainer);
+            CardUI cardUI = cardObj.GetComponent<CardUI>();
+            cardUI.SetCardData(card);
+            cardUI.SetInteractable(true);
+
+            // 绑定点击事件
+            cardUI.OnCardClick = (ui) => OnSellerCardSelected(card, cardIndex);
+        }
+
+        // 设置 GridLayoutGroup
+        GridLayoutGroup grid = sellerHandCardContainer.GetComponent<GridLayoutGroup>();
+        if (grid == null)
+            grid = sellerHandCardContainer.gameObject.AddComponent<GridLayoutGroup>();
+        grid.cellSize = new Vector2(100, 120);
+        grid.spacing = new Vector2(10, 10);
+        grid.childAlignment = TextAnchor.MiddleCenter;
+    }
+    private TMP_Text CreateEmptyText(Transform parent, string message)
+    {
+        GameObject textObj = new GameObject("EmptyText");
+        textObj.transform.SetParent(parent);
+        TMP_Text text = textObj.AddComponent<TMP_Text>();
+        text.text = message;
+        text.fontSize = 20;
+        text.alignment = TextAlignmentOptions.Center;
+        text.color = Color.gray;
+
+        RectTransform rect = textObj.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        return text;
+    }
+    private void OnSellerCardSelected(CardData card, int cardIndex)
+    {
+        if (!isSellerSelecting) return;
+
+        // 清除之前的高亮
+        ClearSellerCardHighlights();
+
+        // 记录选中的卡牌
+        currentTransactionCard = card;
+        currentTransactionHandIndex = cardIndex;
+
+        // 高亮选中的卡牌
+        HighlightSellerCard(card);
+
+        // 启用确认按钮
+        if (acceptButton != null)
+        {
+            acceptButton.interactable = true;
+            acceptButton.GetComponentInChildren<TMP_Text>().text = "Sell";
+        }
+
+        // 更新提示文本
+        if (sellerDialogText != null)
+        {
+            sellerDialogText.text = $"已选中 {card.GetCardName()}，点击「Sell」确认出售";
+        }
+    }
+    private void HighlightSellerCard(CardData card)
+    {
+        if (sellerHandCardContainer == null) return;
+
+        foreach (Transform child in sellerHandCardContainer)
+        {
+            CardUI ui = child.GetComponent<CardUI>();
+            if (ui != null && ui.GetCardData() == card)
+            {
+                ui.SetSelected(true);
+            }
+        }
+    }
+
+    // 清除卖家卡牌高亮
+    private void ClearSellerCardHighlights()
+    {
+        if (sellerHandCardContainer == null) return;
+
+        foreach (Transform child in sellerHandCardContainer)
+        {
+            CardUI ui = child.GetComponent<CardUI>();
+            if (ui != null)
+            {
+                ui.SetSelected(false);
+            }
+        }
+    }
+
+    // 卖家确认出售（点击 Sell 按钮）
+    private void OnSellerConfirm()
+    {
+        if (!isSellerSelecting) return;
+
+        if (currentTransactionCard == null)
+        {
+            Panel.Instance?.AddCue("请先选择要出售的卡牌");
+            return;
+        }
+
+        // 确认出售，执行交易
+        isSellerSelecting = false;
+        ProcessAcceptedTransaction();
+    }
+
 
     private void OnSellerResponse(bool accepted)
     {
         if (sellerDialogPanel != null)
             sellerDialogPanel.SetActive(false);
 
-        if (accepted)
-        {
-            ProcessAcceptedTransaction();
-        }
-        else
+        if (!accepted)
         {
             ProcessRejectedTransaction();
         }
+        // 注意：如果 accepted 为 true，实际交易在 OnSellerConfirm 中执行，这里不处理
     }
 
     private void ProcessAcceptedTransaction()
@@ -689,35 +565,74 @@ public class GameManager : MonoBehaviour
         PlayerData buyer = players[currentTransactionBuyerIndex];
         PlayerData seller = players[currentTransactionSellerIndex];
 
-        CardData soldCard = seller.handCards.Find(c => c.type == currentTransactionType);
-
-        if (soldCard == null)
+        // 使用已选中的卡牌
+        if (currentTransactionCard == null)
         {
-            Log($"卖家玩家{currentTransactionSellerIndex + 1}没有{GetCardTypeName(currentTransactionType)}货物");
+            Panel.Instance?.AddCue("交易失败：未选中卡牌");
+            return;
+        }
+
+        // 验证卡牌是否还在手牌中
+        if (!seller.handCards.Contains(currentTransactionCard))
+        {
+            Panel.Instance?.AddCue("选中的卡牌已不存在");
             ProcessRejectedTransaction();
             return;
         }
 
+        // 打印购买前的金币
+        Panel.Instance?.AddLog($"=== 购买前 ===");
+        Panel.Instance?.AddLog($"买家{buyer.playerIndex + 1}金币: {buyer.gold}");
+        Panel.Instance?.AddLog($"卖家{seller.playerIndex + 1}金币: {seller.gold}");
+
+        // 检查买家金币是否足够
         if (buyer.gold < currentTransactionPrice)
         {
-            Log($"买家金币不足，交易失败");
-            return;
+            Panel.Instance?.AddCue($"玩家{buyer.playerIndex + 1}金币不足，需要{currentTransactionPrice}金币");
+
+            // 处理买家金币不足：扣一张真牌，金币清零，卖家获得应得金币
+            HandleInsufficientGold(buyer, currentTransactionPrice, seller, currentTransactionPrice);
+        }
+        else
+        {
+            // 正常支付
+            buyer.gold -= currentTransactionPrice;
+            seller.gold += currentTransactionPrice;
+            Panel.Instance?.AddCue($"玩家{buyer.playerIndex + 1}支付{currentTransactionPrice}金币给玩家{seller.playerIndex + 1}");
         }
 
-        buyer.gold -= currentTransactionPrice;
-        seller.gold += currentTransactionPrice;
-        seller.handCards.Remove(soldCard);
-        buyer.handCards.Add(soldCard);
+        // 注意：这里不转移卡牌！等待验货结果
+        // 保存临时卡牌信息，用于验货后转移
+        pendingTransactionCard = currentTransactionCard;
+        pendingTransactionBuyer = buyer;
+        pendingTransactionSeller = seller;
+        pendingTransactionPrice = currentTransactionPrice;
 
-        Log($"玩家{currentTransactionBuyerIndex + 1}以{currentTransactionPrice}金币从玩家{currentTransactionSellerIndex + 1}购买了{GetCardName(soldCard)}");
+        Panel.Instance?.AddLog($"玩家{currentTransactionBuyerIndex + 1}以{currentTransactionPrice}金币从玩家{currentTransactionSellerIndex + 1}购买了{GetCardName(currentTransactionCard)}（待验货）");
 
-        UpdateAllUI();
+        // 打印购买后的金币
+        Panel.Instance?.AddLog($"=== 购买后 ===");
+        Panel.Instance?.AddLog($"买家{buyer.playerIndex + 1}金币: {buyer.gold}");
+        Panel.Instance?.AddLog($"卖家{seller.playerIndex + 1}金币: {seller.gold}");
 
-        currentTransactionCard = soldCard;
-        currentTransactionBuyer = buyer;
-        currentTransactionSeller = seller;
+        // 打印所有玩家金币
+        LogAllPlayersGold();
 
-        ShowInspectDialog(soldCard, currentTransactionPrice);
+        Panel.Instance?.UpdateCurrentPlayerUI();
+
+        // 关闭对话框
+        if (sellerDialogPanel != null)
+            sellerDialogPanel.SetActive(false);
+
+        Panel.Instance?.AddLog($"设置验货临时数据 - 卡牌: {GetCardName(pendingTransactionCard)}, 买家: {pendingTransactionBuyer.playerIndex + 1}, 卖家: {pendingTransactionSeller.playerIndex + 1}, 价格: {pendingTransactionPrice}");
+
+        // 显示验货对话框
+        ShowInspectDialog(pendingTransactionCard, pendingTransactionPrice);
+
+        // 重置交易数据
+        currentTransactionCard = null;
+        currentTransactionHandIndex = -1;
+        isSellerSelecting = false;
     }
 
     private void ProcessRejectedTransaction()
@@ -729,17 +644,28 @@ public class GameManager : MonoBehaviour
             buyer.rejectedBuyers.Add(currentTransactionSellerIndex);
         }
 
-        Log($"玩家{currentTransactionSellerIndex + 1}拒绝了交易请求");
+        Panel.Instance?.AddLog($"玩家{currentTransactionSellerIndex + 1}拒绝了交易请求");
+
+        // 重置选择状态
+        currentTransactionCard = null;
+        currentTransactionHandIndex = -1;
+        isSellerSelecting = false;
+
+        // 通过 Panel 重新打开购买选择面板
+        Panel.Instance?.ReopenBuyTargetPanel();
     }
 
     private void ShowInspectDialog(CardData card, int price)
     {
-        string cardName = GetCardName(card);
+        // 使用传入的参数，不依赖全局变量
+        string goodsName = GetCardTypeName(card.type);
         int inspectPrice = Mathf.CeilToInt(price * 0.5f);
+
+        Panel.Instance?.AddLog($"显示验货对话框 - 卡牌: {GetCardName(card)}, 价格: {price}, 验货费: {inspectPrice}");
 
         if (inspectDialogText != null)
         {
-            inspectDialogText.text = $"您购买了{cardName}\n\n是否花费{inspectPrice}金币进行验货？\n\n" +
+            inspectDialogText.text = $"您购买了一张【{goodsName}】\n\n是否花费{inspectPrice}金币进行验货？\n\n" +
                                      $"验货后如果是真货，买家多付{inspectPrice}金币\n" +
                                      $"如果是假货，卖家退还{price}金币并赔偿{inspectPrice}金币";
         }
@@ -750,325 +676,363 @@ public class GameManager : MonoBehaviour
         if (inspectButton != null)
         {
             inspectButton.onClick.RemoveAllListeners();
-            inspectButton.onClick.AddListener(() => OnInspectChoice(true));
+            inspectButton.onClick.AddListener(() => {
+                Panel.Instance?.AddLog($"验货按钮点击 - 卡牌: {GetCardName(card)}");
+                OnInspectChoice(true);
+            });
         }
 
         if (noInspectButton != null)
         {
             noInspectButton.onClick.RemoveAllListeners();
-            noInspectButton.onClick.AddListener(() => OnInspectChoice(false));
+            noInspectButton.onClick.AddListener(() => {
+                Panel.Instance?.AddLog($"不验货按钮点击 - 卡牌: {GetCardName(card)}");
+                OnInspectChoice(false);
+            });
         }
     }
 
     private void OnInspectChoice(bool inspect)
     {
+        Panel.Instance?.AddLog($"OnInspectChoice 被调用 - inspect: {inspect}");
+
         if (inspectDialogPanel != null)
             inspectDialogPanel.SetActive(false);
 
+        // 使用临时变量
+        if (pendingTransactionCard == null || pendingTransactionBuyer == null || pendingTransactionSeller == null)
+        {
+            Panel.Instance?.AddCue($"交易数据无效");
+            Panel.Instance?.AddLog($"交易数据无效");
+            pendingTransactionCard = null;
+            pendingTransactionBuyer = null;
+            pendingTransactionSeller = null;
+            return;
+        }
+
+        // 保存数据
+        CardData card = pendingTransactionCard;
+        PlayerData buyer = pendingTransactionBuyer;
+        PlayerData seller = pendingTransactionSeller;
+        int price = pendingTransactionPrice;
+
+        Panel.Instance?.AddLog($"处理交易结果 - 卡牌: {GetCardName(card)}, 买家: {buyer.playerIndex + 1}, 卖家: {seller.playerIndex + 1}");
+
         if (inspect)
         {
-            bool isReal = (currentTransactionCard.quality == CardData.CardQuality.Real);
-            ExecuteInspect(isReal, currentTransactionPrice, currentTransactionBuyer, currentTransactionSeller);
+            // 验货：先处理金币，再转移卡牌
+            bool isReal = (card.quality == CardData.CardQuality.Real);
+            ExecuteInspect(isReal, price, buyer, seller);
+
+            // 验货后转移卡牌
+            seller.handCards.Remove(card);
+            buyer.handCards.Add(card);
+            Panel.Instance?.AddLog($"验货完成，卡牌已转移: {GetCardName(card)}");
+            Panel.Instance?.AddCue($"验货完成，{GetCardName(card)}已加入你的手牌");
         }
         else
         {
-            Log($"玩家{currentTransactionBuyerIndex + 1}选择不验货");
+            // 不验货：直接转移卡牌
+            seller.handCards.Remove(card);
+            buyer.handCards.Add(card);
+            Panel.Instance?.AddLog($"玩家{buyer.playerIndex + 1}选择不验货，卡牌已转移: {GetCardName(card)}");
+            Panel.Instance?.AddCue($"交易完成，{GetCardName(card)}已加入你的手牌");
         }
+       
+        // 标记买家已购买
+        buyer.hasBoughtThisTurn = true;
 
-        if (currentTransactionBuyer != null)
-            currentTransactionBuyer.hasBoughtThisTurn = true;
+        // 刷新UI
+        Panel.Instance?.UpdateCurrentPlayerUI();
 
-        UpdateAllUI();
+        // 打印所有玩家金币和手牌信息
+        LogAllPlayersGold();
+        Panel.Instance?.AddLog($"买家手牌数量: {buyer.handCards.Count}");
+        Panel.Instance?.AddLog($"卖家手牌数量: {seller.handCards.Count}");
 
-        if (currentTransactionBuyer != null && currentTransactionBuyer.hasPlacedThisTurn && currentTransactionBuyer.hasBoughtThisTurn)
-        {
-            EndTurn();
-        }
+        // 清空临时数据
+        pendingTransactionCard = null;
+        pendingTransactionBuyer = null;
+        pendingTransactionSeller = null;
 
-        currentTransactionCard = null;
-        currentTransactionBuyer = null;
-        currentTransactionSeller = null;
-    }
-
-    public int GetBankStock(CardData.CardType type)
-    {
-        if (bankStock == null)
-        {
-            Debug.LogError("bankStock 未初始化");
-            return 0;
-        }
-
-        if (bankStock.ContainsKey(type))
-        {
-            return bankStock[type];
-        }
-
-        return 0;
-    }
-
-    public bool BankHasGoods(CardData.CardType type)
-    {
-        return GetBankStock(type) > 0;
+        // 注意：这里不调用 CheckTurnEnd()，让玩家继续本回合的其他操作
+        // 如果玩家已经完成了明牌操作，会在 Panel 的 Update 中自动结束回合
     }
 
     void ExecuteInspect(bool isReal, int price, PlayerData buyer, PlayerData seller)
     {
+        // 添加空值检查
+        if (buyer == null || seller == null)
+        {
+            Panel.Instance?.AddCue("验货失败：买家或卖家数据无效");
+            return;
+        }
+
         int extra = Mathf.CeilToInt(price * 0.5f);
+
+        Panel.Instance?.AddLog($"=== 验货处理 ===");
+        Panel.Instance?.AddLog($"买家{buyer.playerIndex + 1}金币: {buyer.gold}");
+        Panel.Instance?.AddLog($"卖家{seller.playerIndex + 1}金币: {seller.gold}");
 
         if (isReal)
         {
+            Panel.Instance?.AddLog($"验货：真货，买家需多付{extra}金币");
+
             if (buyer.gold >= extra)
             {
                 buyer.gold -= extra;
                 seller.gold += extra;
-                Log($"验货结果：真货，买家多付{extra}金币");
+                Panel.Instance?.AddCue($"验货结果：真货，买家多付{extra}金币");
             }
             else
             {
-                HandleInsufficientGold(buyer, extra);
-                if (buyer.gold >= extra)
-                {
-                    buyer.gold -= extra;
-                    seller.gold += extra;
-                }
+                Panel.Instance?.AddCue($"买家金币不足，需要{extra}金币，当前{buyer.gold}金币");
+                HandleInsufficientGold(buyer, extra, seller, extra);
             }
         }
         else
         {
             int totalRefund = price + extra;
+            Panel.Instance?.AddLog($"验货：假货，卖家需退还{price}并赔偿{extra}金币，共{totalRefund}金币");
+
             if (seller.gold >= totalRefund)
             {
                 seller.gold -= totalRefund;
                 buyer.gold += totalRefund;
-                Log($"验货结果：假货，卖家退还{price}并赔偿{extra}金币");
+                Panel.Instance?.AddCue($"验货结果：假货，卖家退还{price}并赔偿{extra}金币");
             }
             else
             {
-                HandleInsufficientGold(seller, totalRefund);
-                if (seller.gold >= totalRefund)
-                {
-                    seller.gold -= totalRefund;
-                    buyer.gold += totalRefund;
-                }
+                Panel.Instance?.AddCue($"卖家金币不足，需要退还{totalRefund}金币，当前{seller.gold}金币");
+                HandleInsufficientGold(seller, totalRefund, buyer, totalRefund);
             }
         }
-        UpdateAllUI();
+
+        Panel.Instance?.AddLog($"验货后 - 买家金币: {buyer.gold}, 卖家金币: {seller.gold}");
+    }
+    private bool HandleInsufficientGold(PlayerData player, int requiredGold, PlayerData receiver, int amountToGive)
+    {
+        if (player == null)
+        {
+            Panel.Instance?.AddCue("处理失败：玩家数据无效");
+            return false;
+        }
+
+        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}需要{requiredGold}金币，当前{player.gold}金币，不足！");
+
+        // 查找一张真牌
+        CardData realCard = player.handCards.Find(c => c.quality == CardData.CardQuality.Real);
+        if (realCard == null)
+        {
+            // 没有真牌可扣，玩家破产
+            Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}没有真牌可扣除，宣布破产！");
+            HandleBankruptcy(player);
+            return false;
+        }
+
+        // 扣除一张真牌（不获得金币）
+        player.handCards.Remove(realCard);
+        bankStock[realCard.type]++;
+        Panel.Instance?.AddLog($"玩家{player.playerIndex + 1}因金币不足，被强制扣除一张{GetCardName(realCard)}");
+        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}被强制扣除一张{GetCardName(realCard)}");
+
+        // 记录扣除前的金币
+        int oldGold = player.gold;
+
+        // 金币清零
+        player.gold = 0;
+        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}金币从{oldGold}清零");
+
+        // 接收方获得应得金币
+        if (receiver != null && amountToGive > 0)
+        {
+            receiver.gold += amountToGive;
+            Panel.Instance?.AddCue($"玩家{receiver.playerIndex + 1}获得{amountToGive}金币，当前{receiver.gold}金币");
+        }
+
+        return true;
     }
 
-    void HandleInsufficientGold(PlayerData player, int requiredGold)
+    public void CheckTurnEnd()
     {
-        while (player.gold < requiredGold)
+        PlayerData cur = players[currentTurnIndex];
+        if (cur.hasPlacedThisTurn && cur.hasBoughtThisTurn)
         {
-            CardData realCard = player.handCards.Find(c => c.quality == CardData.CardQuality.Real);
-            if (realCard == null) break;
-
-            player.handCards.Remove(realCard);
-            player.gold += 8;
-            bankStock[realCard.type]++;
-            Log($"玩家{player.playerIndex + 1}抵押了一张{GetCardName(realCard)}，获得8金币");
+            EndTurn();
         }
-        if (player.gold < requiredGold)
-            player.gold = 0;
     }
-    #endregion
 
-    #region UI更新
-    /// <summary>
-    /// 刷新所有UI
-    /// </summary>
-    private void UpdateAllUI()
+    void UpdateAllUI()
     {
-        // 更新主面板
-        if (Panel.Instance != null)
-        {
-            Panel.Instance.UpdateAllPlayersUI();
-        }
-
-        // 更新玩家详情面板
-        foreach (var playerPanel in playerPanels)
-        {
-            if (playerPanel != null)
-                playerPanel.RefreshPanel();
-        }
-
-        if (turnText != null)
-            turnText.text = $"当前回合: 玩家{currentTurnIndex + 1}";
-
-        if (stateText != null)
-            stateText.text = GetStateDescription();
-
+        Panel.Instance.UpdateCurrentPlayerUI();
+       
+        if (turnText != null) turnText.text = $"当前回合: 玩家{currentTurnIndex + 1}";
+        if (stateText != null) stateText.text = (currentState == GameState.Phase1_Sell) ? "阶段1：出售真牌" : "阶段2：明牌或购买";
         UpdateBankUI();
     }
 
-    private void UpdateBankUI()
-    {
-        if (bankSugarText != null)
-        {
-            int sugarCount = bankStock.ContainsKey(CardData.CardType.Sugar) ? bankStock[CardData.CardType.Sugar] : 0;
-            bankSugarText.text = $"糖: {sugarCount}张";
-        }
+    void UpdateBankUI() { /* 简单显示银行库存，可省略 */ }
 
-        if (bankOilText != null)
-        {
-            int oilCount = bankStock.ContainsKey(CardData.CardType.Oil) ? bankStock[CardData.CardType.Oil] : 0;
-            bankOilText.text = $"油: {oilCount}张";
-        }
-
-        if (bankFlourText != null)
-        {
-            int flourCount = bankStock.ContainsKey(CardData.CardType.Flour) ? bankStock[CardData.CardType.Flour] : 0;
-            bankFlourText.text = $"面: {flourCount}张";
-        }
-    }
-
-    private void EnablePhase1Buttons(bool enable)
-    {
-        if (sellRealCardButton != null)
-            sellRealCardButton.interactable = enable;
-    }
-
-    private void EnablePhase2Buttons(bool enable)
-    {
-        if (placeCardButton != null)
-            placeCardButton.interactable = enable;
-        if (buyButton != null)
-            buyButton.interactable = enable;
-
-        if (enable)
-        {
-            PlayerData currentPlayer = players[currentTurnIndex];
-            if (currentPlayer.hasPlacedThisTurn && placeCardButton != null)
-                placeCardButton.interactable = false;
-            if (currentPlayer.hasBoughtThisTurn && buyButton != null)
-                buyButton.interactable = false;
-        }
-    }
-    #endregion
-
-    #region 辅助方法
-    private string GetStateDescription()
-    {
-        switch (currentState)
-        {
-            case GameState.Phase1_Sell: return "阶段1：可以选择出售真牌";
-            case GameState.Phase2_Action: return "阶段2：可以选择明牌或购买";
-            case GameState.TurnEnd: return "回合结束";
-            case GameState.GameEnd: return "游戏结束";
-            default: return "等待...";
-        }
-    }
-
-    private string GetCardName(CardData card)
-    {
-        if (card == null) return "无";
-        string typeName = GetCardTypeName(card.type);
-        string qualityMark = card.quality == CardData.CardQuality.Real ? "真" : "假";
-        return $"{typeName}{qualityMark}";
-    }
-
-    private string GetCardTypeName(CardData.CardType type)
-    {
-        switch (type)
-        {
-            case CardData.CardType.Sugar: return "糖";
-            case CardData.CardType.Oil: return "油";
-            case CardData.CardType.Flour: return "面";
-            default: return "未知";
-        }
-    }
-
-    private void Log(string message)
-    {
-        Debug.Log(message);
-        if (logText != null)
-        {
-            logText.text = $"{System.DateTime.Now:HH:mm:ss} - {message}\n" + logText.text;
-            string[] lines = logText.text.Split('\n');
-            if (lines.Length > 20)
-            {
-                logText.text = string.Join("\n", lines, 0, 20);
-            }
-        }
-    }
-    #endregion
-
-    #region 玩家交互
-    private void OnPlayerCardSelected(int playerIndex, CardData card)
-    {
-        if (playerIndex != currentTurnIndex) return;
-
-        if (currentState == GameState.Phase1_Sell)
-        {
-            if (card.quality == CardData.CardQuality.Real)
-            {
-                OnSellRealCard(card);
-            }
-        }
-        else if (currentState == GameState.Phase2_Action)
-        {
-            selectedCardForPlace = card;
-            Log($"已选中{GetCardName(card)}，请点击明牌区槽位");
-            if (placeCardPanel != null)
-                placeCardPanel.SetActive(true);
-        }
-    }
-
-    private void OnPlayerOpenSlotSelected(int playerIndex, int slotIndex)
-    {
-        if (playerIndex != currentTurnIndex) return;
-
-        if (currentState == GameState.Phase2_Action && selectedCardForPlace != null)
-        {
-            OnPlaceCardSelected(slotIndex);
-            selectedCardForPlace = null;
-            if (playerPanels[currentTurnIndex] != null)
-                playerPanels[currentTurnIndex].ClearSelectedCardInPanel();
-        }
-    }
-    #endregion
-
-    #region 胜利条件
     bool CheckWinCondition()
     {
         foreach (var p in players)
         {
             if (p.isRealMerchant && CheckRealWin(p.openCards))
             {
-                Log($"玩家{p.playerIndex + 1}（真货商人）获胜！");
+                Panel.Instance.AddCue($"玩家{p.playerIndex + 1}胜利！");
                 return true;
             }
             else if (!p.isRealMerchant && CheckFakeWin(p.openCards))
             {
-                Log($"玩家{p.playerIndex + 1}（假货商人）获胜！");
+                Panel.Instance.AddCue($"玩家{p.playerIndex + 1}胜利！");
                 return true;
             }
         }
         return false;
     }
 
+    // 处理破产
+    private void HandleBankruptcy(PlayerData bankruptPlayer)
+    {
+        if (bankruptPlayer == null) return;
+
+        Panel.Instance?.AddCue($"玩家{bankruptPlayer.playerIndex + 1}破产！游戏结束！");
+        Panel.Instance?.AddLog($"玩家{bankruptPlayer.playerIndex + 1}因无法支付而破产");
+
+        // 将破产玩家的金币归零
+        bankruptPlayer.gold = 0;
+
+        // 找出剩下的玩家
+        List<PlayerData> remainingPlayers = new List<PlayerData>();
+        foreach (var player in players)
+        {
+            if (player != bankruptPlayer)
+            {
+                remainingPlayers.Add(player);
+            }
+        }
+
+        if (remainingPlayers.Count == 0)
+        {
+            Panel.Instance?.AddCue("所有玩家都破产了！");
+            currentState = GameState.GameEnd;
+            return;
+        }
+
+        // 确定获胜者
+        PlayerData winner = DetermineWinner(remainingPlayers);
+
+        // 显示获胜信息
+        if (winner != null)
+        {
+            string winnerIdentity = winner.isRealMerchant ? "真货商人" : "假货商人";
+            Panel.Instance?.AddCue($"玩家{winner.playerIndex + 1}（{winnerIdentity}）获胜！");
+            Panel.Instance?.AddLog($"游戏结束，玩家{winner.playerIndex + 1}获胜");
+        }
+
+        // 结束游戏
+        currentState = GameState.GameEnd;
+    }
+
+    // 确定获胜者（破产场景）
+    private PlayerData DetermineWinner(List<PlayerData> remainingPlayers)
+    {
+        if (remainingPlayers.Count == 1)
+        {
+            return remainingPlayers[0];
+        }
+
+        // 找出金币最多的玩家
+        int maxGold = remainingPlayers.Max(p => p.gold);
+        List<PlayerData> goldLeaders = remainingPlayers.Where(p => p.gold == maxGold).ToList();
+
+        if (goldLeaders.Count == 1)
+        {
+            return goldLeaders[0];
+        }
+
+        // 金币相同，比较真牌数量（手牌+明牌区）
+        PlayerData winner = null;
+        int maxRealCards = -1;
+
+        foreach (var player in goldLeaders)
+        {
+            int realCardCount = player.handCards.Count(c => c.quality == CardData.CardQuality.Real) +
+                                player.openCards.Count(c => c != null && c.quality == CardData.CardQuality.Real);
+
+            Panel.Instance?.AddLog($"玩家{player.playerIndex + 1} 真牌数量: {realCardCount}");
+
+            if (realCardCount > maxRealCards)
+            {
+                maxRealCards = realCardCount;
+                winner = player;
+            }
+        }
+
+        return winner;
+    }
+    private void LogAllPlayersGold()
+    {
+        Panel.Instance?.AddLog("=== 当前所有玩家金币 ===");
+        for (int i = 0; i < players.Count; i++)
+        {
+            Panel.Instance?.AddLog($"玩家{i + 1}: {players[i].gold}金币");
+        }
+        Panel.Instance?.AddLog("======================");
+    }
+    private void EnablePhase1Buttons(bool enable)
+    {
+        if (Panel.Instance != null && Panel.Instance.sellButton != null)
+        {
+            Panel.Instance.sellButton.interactable = enable;
+        }
+    }
+
+    // 启用/禁用阶段2按钮（明牌和购买按钮）
+    private void EnablePhase2Buttons(bool enable)
+    {
+        if (Panel.Instance != null)
+        {
+            if (Panel.Instance.placeButton != null)
+                Panel.Instance.placeButton.interactable = enable;
+            if (Panel.Instance.buyButton != null)
+                Panel.Instance.buyButton.interactable = enable;
+        }
+    }
     bool CheckRealWin(List<CardData> openCards)
     {
         if (openCards.Any(c => c == null)) return false;
-
-        int sugarCount = openCards.Count(c => c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Real);
-        int oilCount = openCards.Count(c => c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Real);
-        int flourCount = openCards.Count(c => c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Real);
-
-        return sugarCount == 3 && oilCount == 3 && flourCount == 3;
+        int sugar = openCards.Count(c => c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Real);
+        int oil = openCards.Count(c => c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Real);
+        int flour = openCards.Count(c => c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Real);
+        return sugar == 3 && oil == 3 && flour == 3;
     }
 
     bool CheckFakeWin(List<CardData> openCards)
     {
-        int sugarCount = openCards.Count(c => c != null && c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Fake);
-        int oilCount = openCards.Count(c => c != null && c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Fake);
-        int flourCount = openCards.Count(c => c != null && c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Fake);
+        int sugar = openCards.Count(c => c != null && c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Fake);
+        int oil = openCards.Count(c => c != null && c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Fake);
+        int flour = openCards.Count(c => c != null && c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Fake);
 
-        int total = sugarCount + oilCount + flourCount;
-        if (total != 7) return false;
+        int total = sugar + oil + flour;
+        if (total < 7) return false;  // 至少需要7张假牌
 
-        var counts = new List<int> { sugarCount, oilCount, flourCount };
-        counts.Sort();
-        return counts[2] == 3 && counts[1] == 2 && counts[0] == 2;
+        // 检查是否满足：有一种牌数量 >= 3，另外两种牌数量 >= 2
+        List<int> counts = new List<int> { sugar, oil, flour };
+        counts.Sort();  // 从小到大排序
+
+        // 排序后，counts[0] <= counts[1] <= counts[2]
+        // 条件：最大的 >= 3，第二大的 >= 2
+        return counts[2] >= 3 && counts[1] >= 2;
     }
-    #endregion
+
+    string GetCardName(CardData c) => $"{GetCardTypeName(c.type)}{(c.quality == CardData.CardQuality.Real ? "真" : "假")}";
+    string GetCardTypeName(CardData.CardType t) => t == CardData.CardType.Sugar ? "糖" : t == CardData.CardType.Oil ? "油" : "面";
+
+
+
+    public int GetBankStock(CardData.CardType type) => bankStock.ContainsKey(type) ? bankStock[type] : 0;
+    public bool BankHasGoods(CardData.CardType type) => GetBankStock(type) > 0;
+
+
 }

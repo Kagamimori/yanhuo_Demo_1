@@ -13,6 +13,8 @@ public class PlayerData
     public List<CardData> handCards;
     public List<CardData> openCards; // 明牌区，固定9格，没有卡牌的位置用null占位
 
+    public bool hasBankPurchaseFailed = false;  // 是否向银行购买失败过
+
     // 回合标记
     public bool hasSoldThisTurn;     // 阶段1是否已出售
     public bool hasPlacedThisTurn;   // 阶段2是否已执行过明牌/替换

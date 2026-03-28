@@ -1,26 +1,17 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems;
 using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
 {
-    [Header("UI组件引用")]
     public Image cardBackground;
     public TMP_Text cardNameText;
-    public TMP_Text cardTypeText;
-    public Image qualityIcon;
-
-    [Header("颜色配置")]
     public Color realCardColor = new Color(0.9f, 0.85f, 0.7f);
     public Color fakeCardColor = new Color(0.85f, 0.7f, 0.7f);
     public Color selectedColor = new Color(0.7f, 0.85f, 0.9f);
     public Color emptyColor = new Color(0.5f, 0.5f, 0.5f, 0.5f);
     public Color disabledColor = new Color(0.6f, 0.6f, 0.6f, 0.5f);
-
-    [Header("图标配置")]
-    public Sprite realIcon;
-    public Sprite fakeIcon;
 
     private CardData cardData;
     private bool isSelected = false;
@@ -28,10 +19,10 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
     private Button button;
 
     public System.Action<CardUI> OnCardClick;
-    public System.Action<CardUI> OnCardHover;
 
     void Awake()
     {
+        // 确保 Button 组件存在
         button = GetComponent<Button>();
         if (button == null)
         {
@@ -52,75 +43,44 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
         cardData = null;
         if (cardNameText != null)
             cardNameText.text = "空位";
-        if (cardTypeText != null)
-            cardTypeText.text = "";
         if (cardBackground != null)
             cardBackground.color = emptyColor;
-        if (qualityIcon != null)
-            qualityIcon.gameObject.SetActive(false);
         UpdateInteractable();
     }
 
-    /// <summary>
-    /// 设置卡牌是否可交互
-    /// </summary>
     public void SetInteractable(bool interactable)
     {
         isInteractable = interactable;
         UpdateInteractable();
     }
 
-    private void UpdateInteractable()
+    void UpdateInteractable()
     {
+        // 添加空值检查
         if (button != null)
-        {
             button.interactable = isInteractable;
-        }
 
         if (!isInteractable && cardBackground != null)
         {
-            Color color = cardBackground.color;
-            color.a = 0.6f;
-            cardBackground.color = color;
-        }
-        else if (isInteractable && cardData != null)
-        {
-            cardBackground.color = cardData.quality == CardData.CardQuality.Real ? realCardColor : fakeCardColor;
-        }
-        else if (isInteractable && cardData == null)
-        {
-            cardBackground.color = emptyColor;
+            Color c = cardBackground.color;
+            c.a = 0.6f;
+            cardBackground.color = c;
         }
     }
 
-    private void UpdateUI()
+    void UpdateUI()
     {
         if (cardData == null) return;
-
         if (cardNameText != null)
         {
             string qualityMark = cardData.quality == CardData.CardQuality.Real ? "【真】" : "【假】";
             cardNameText.text = $"{qualityMark}{GetCardTypeName()}";
         }
-
-        if (cardTypeText != null)
-        {
-            cardTypeText.text = GetCardTypeName();
-        }
-
         if (cardBackground != null)
-        {
             cardBackground.color = cardData.quality == CardData.CardQuality.Real ? realCardColor : fakeCardColor;
-        }
-
-        if (qualityIcon != null)
-        {
-            qualityIcon.gameObject.SetActive(true);
-            qualityIcon.sprite = cardData.quality == CardData.CardQuality.Real ? realIcon : fakeIcon;
-        }
     }
 
-    private string GetCardTypeName()
+    string GetCardTypeName()
     {
         if (cardData == null) return "";
         switch (cardData.type)
@@ -132,54 +92,42 @@ public class CardUI : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler,
         }
     }
 
-    public CardData GetCardData()
-    {
-        return cardData;
-    }
+    public CardData GetCardData() => cardData;
 
     public void SetSelected(bool selected)
     {
         isSelected = selected;
         if (cardBackground != null)
         {
-            if (selected)
-            {
-                cardBackground.color = selectedColor;
-            }
-            else if (cardData != null)
-            {
-                cardBackground.color = cardData.quality == CardData.CardQuality.Real ? realCardColor : fakeCardColor;
-            }
+            if (selected) cardBackground.color = selectedColor;
+            else if (cardData != null) cardBackground.color = cardData.quality == CardData.CardQuality.Real ? realCardColor : fakeCardColor;
+            else//没被选择，自动灰
+                cardBackground.color = emptyColor;
         }
     }
 
-    public void ClearSelected()
-    {
-        SetSelected(false);
-    }
+    public void ClearSelected() => SetSelected(false);
 
     public void OnPointerClick(PointerEventData eventData)
     {
         if (isInteractable && OnCardClick != null)
-        {
             OnCardClick(this);
-        }
     }
 
     public void OnPointerEnter(PointerEventData eventData)
     {
-        if (OnCardHover != null)
+        if (isInteractable && cardBackground != null && cardData != null)
         {
-            OnCardHover(this);
-        }
-        if (isInteractable)
-        {
-            transform.localScale = Vector3.one * 1.05f;
+            cardBackground.color = new Color(0.8f, 0.8f, 0.8f);
         }
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
-        transform.localScale = Vector3.one;
+        if (isInteractable && cardBackground != null && cardData != null)
+        {
+            cardBackground.color = cardData.quality == CardData.CardQuality.Real ? realCardColor : fakeCardColor;
+        }
+        if (isSelected) cardBackground.color = selectedColor;
     }
 }
