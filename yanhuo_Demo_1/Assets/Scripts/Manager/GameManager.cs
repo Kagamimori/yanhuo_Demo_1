@@ -6,6 +6,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using LitJson;
 using System.IO;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class GameManager : MonoBehaviour
 {
@@ -40,6 +43,9 @@ public class GameManager : MonoBehaviour
     public TMP_Text inspectDialogText;
     public Button inspectButton, noInspectButton;
     public Transform sellerHandCardContainer;
+    //
+    public Button AButton;
+    public Button BButton;
 
     [Header("字体")]
     public TMP_FontAsset chineseFont;
@@ -92,14 +98,21 @@ public class GameManager : MonoBehaviour
             text.font = chineseFont;
         }
 
-        StartCoroutine(SetFontForNewTexts(chineseFont));
-    }
 
+        AButton.onClick.AddListener(() => AButton.gameObject.SetActive(false));
+        BButton.onClick.AddListener(() => BButton.gameObject.SetActive(false));
+
+        
+
+        StartCoroutine(SetFontForNewTexts(chineseFont));
+
+    }
+    
     IEnumerator SetFontForNewTexts(TMP_FontAsset font)
     {
         while (true)
         {
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(0.3f);
             TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
             foreach (var text in texts)
             {
@@ -161,10 +174,14 @@ public class GameManager : MonoBehaviour
 
     void StartTurn()
     {
-
+        //
+        AButton.gameObject.SetActive(true);
+        //
         PlayerData cur = players[currentTurnIndex];
         cur.hasSoldThisTurn = cur.hasPlacedThisTurn = cur.hasBoughtThisTurn = false;
         cur.hasBankPurchaseFailed = false;
+        cur.hasStolenThisTurn = false;
+        cur.hasRejectedThisTurn = false;
         cur.rejectedBuyers.Clear();
 
         // 使用配置中的基础金币和领先者惩罚
@@ -289,6 +306,7 @@ public class GameManager : MonoBehaviour
             Panel.Instance.AddCue("游戏结束！");
             return;
         }
+        
 
         PlayerData cur = players[currentTurnIndex];
         Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合结束");
@@ -385,7 +403,8 @@ public class GameManager : MonoBehaviour
         // 重置选择状态
         currentTransactionHandIndex = -1;
         isSellerSelecting = true;
-
+        PlayerData seller = players[sellerIndex];
+        bool canReject = !seller.hasRejectedThisTurn;
         // 设置对话框标题
         if (sellerDialogText != null)
         {
@@ -399,6 +418,19 @@ public class GameManager : MonoBehaviour
         RefreshSellerHandCards(sellerIndex, wantedType);
 
         // 设置按钮文本和事件
+        // 设置 reject 按钮
+        if (rejectButton != null)
+        {
+            rejectButton.onClick.RemoveAllListeners();
+            rejectButton.onClick.AddListener(() => OnSellerResponse(false));
+            rejectButton.interactable = canReject;
+
+            TMP_Text rejectText = rejectButton.GetComponentInChildren<TMP_Text>();
+            if (rejectText != null)
+            {
+                rejectText.text = canReject ? "Refuse" : "已拒绝过";
+            }
+        }
         if (acceptButton != null)
         {
             acceptButton.GetComponentInChildren<TMP_Text>().text = "Confirm";
@@ -407,15 +439,14 @@ public class GameManager : MonoBehaviour
             acceptButton.interactable = false;  // 初始禁用，直到选中卡牌
         }
 
-        if (rejectButton != null)
-        {
-            rejectButton.GetComponentInChildren<TMP_Text>().text = "Refuse";
-            rejectButton.onClick.RemoveAllListeners();
-            rejectButton.onClick.AddListener(() => OnSellerResponse(false));
-        }
+        
 
         if (sellerDialogPanel != null)
             sellerDialogPanel.SetActive(true);
+
+        //
+        BButton.gameObject.SetActive(true);
+        AButton.gameObject.SetActive(true);
     }
     private void RefreshSellerHandCards(int sellerIndex, CardData.CardType wantedType)
     {
@@ -549,7 +580,8 @@ public class GameManager : MonoBehaviour
             Panel.Instance?.AddCue("请先选择要出售的卡牌");
             return;
         }
-
+        
+        
         // 确认出售，执行交易
         isSellerSelecting = false;
         ProcessAcceptedTransaction();
@@ -646,12 +678,14 @@ public class GameManager : MonoBehaviour
     private void ProcessRejectedTransaction()
     {
         PlayerData buyer = players[currentTransactionBuyerIndex];
+        PlayerData seller = players[currentTransactionSellerIndex];
+
 
         if (!buyer.rejectedBuyers.Contains(currentTransactionSellerIndex))
         {
             buyer.rejectedBuyers.Add(currentTransactionSellerIndex);
         }
-
+        seller.hasRejectedThisTurn = true;
         Panel.Instance?.AddLog($"玩家{currentTransactionSellerIndex + 1}拒绝了交易请求");
 
         // 重置选择状态
@@ -896,12 +930,32 @@ public class GameManager : MonoBehaviour
         {
             if (p.isRealMerchant && CheckRealWin(p.openCards))
             {
-                Panel.Instance.AddCue($"玩家{p.playerIndex + 1}胜利！");
+                string winnerIdentity = "真货商人";
+                Panel.Instance.AddCue($"玩家{p.playerIndex + 1}（{winnerIdentity}）获胜！");
+                Panel.Instance.AddLog($"游戏结束！玩家{p.playerIndex + 1}（{winnerIdentity}）获胜！");
+                Debug.Log($"=== 游戏结束 === 玩家{p.playerIndex + 1}（{winnerIdentity}）获胜！");
+
+                // 退出运行
+#if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
                 return true;
             }
             else if (!p.isRealMerchant && CheckFakeWin(p.openCards))
             {
-                Panel.Instance.AddCue($"玩家{p.playerIndex + 1}胜利！");
+                string winnerIdentity = "假货商人";
+                Panel.Instance.AddCue($"玩家{p.playerIndex + 1}（{winnerIdentity}）获胜！");
+                Panel.Instance.AddLog($"游戏结束！玩家{p.playerIndex + 1}（{winnerIdentity}）获胜！");
+                Debug.Log($"=== 游戏结束 === 玩家{p.playerIndex + 1}（{winnerIdentity}）获胜！");
+
+                // 退出运行
+#if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
                 return true;
             }
         }
@@ -932,7 +986,14 @@ public class GameManager : MonoBehaviour
         if (remainingPlayers.Count == 0)
         {
             Panel.Instance?.AddCue("所有玩家都破产了！");
-            currentState = GameState.GameEnd;
+            Panel.Instance?.AddLog("所有玩家都破产了，游戏结束！");
+            Debug.Log("=== 游戏结束 === 所有玩家都破产了！");
+
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
             return;
         }
 
@@ -944,10 +1005,16 @@ public class GameManager : MonoBehaviour
         {
             string winnerIdentity = winner.isRealMerchant ? "真货商人" : "假货商人";
             Panel.Instance?.AddCue($"玩家{winner.playerIndex + 1}（{winnerIdentity}）获胜！");
-            Panel.Instance?.AddLog($"游戏结束，玩家{winner.playerIndex + 1}获胜");
+            Panel.Instance?.AddLog($"游戏结束，玩家{winner.playerIndex + 1}（{winnerIdentity}）获胜");
+            Debug.Log($"=== 游戏结束 === 玩家{winner.playerIndex + 1}（{winnerIdentity}）获胜！");
+
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
         }
 
-        // 结束游戏
         currentState = GameState.GameEnd;
     }
 
@@ -1018,24 +1085,43 @@ public class GameManager : MonoBehaviour
     }
     bool CheckRealWin(List<CardData> openCards)
     {
-        if (openCards.Any(c => c == null)) return false;
-        int sugar = openCards.Count(c => c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Real);
-        int oil = openCards.Count(c => c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Real);
-        int flour = openCards.Count(c => c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Real);
-        return sugar == Config.realWinRequired && oil == Config.realWinRequired && flour == Config.realWinRequired;
+        if (openCards == null) return false;
+        // 检查是否所有槽位都有牌（真商需要9张全满）
+        //if (openCards.Any(c => c == null)) return false;
+
+        // 使用配置中的数量要求(只遍历非空的卡牌)
+        int sugar = openCards.Count(c => c != null && c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Real);
+        int oil = openCards.Count(c => c != null && c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Real);
+        int flour = openCards.Count(c => c != null && c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Real);
+        int total = sugar + oil + flour;
+        if (total < Config.realWinTotalRequired) return false;
+        List<int> counts = new List<int> { sugar, oil, flour };
+        counts.Sort();
+        return counts[2] >= Config.realWinMajorMin && counts[1] >= Config.realWinMidMin;
+        
     }
 
     bool CheckFakeWin(List<CardData> openCards)
     {
+        if (openCards == null) return false;
+
         int sugar = openCards.Count(c => c != null && c.type == CardData.CardType.Sugar && c.quality == CardData.CardQuality.Fake);
         int oil = openCards.Count(c => c != null && c.type == CardData.CardType.Oil && c.quality == CardData.CardQuality.Fake);
         int flour = openCards.Count(c => c != null && c.type == CardData.CardType.Flour && c.quality == CardData.CardQuality.Fake);
-        int total = sugar + oil + flour;
-        if (total < Config.fakeWinTotal) return false;
 
+        
+        int total = sugar + oil + flour;
+
+        // 检查总假牌数量是否达到要求
+        if (total < Config.fakeWinTotalRequired) return false;
+
+        // 排序后检查分布
         List<int> counts = new List<int> { sugar, oil, flour };
-        counts.Sort();
-        return counts[2] >= Config.fakeWinMinMajor && counts[1] >= Config.fakeWinMid;
+        counts.Sort(); // 从小到大排序
+
+        // 条件：最大的 >= majorMin，第二大的 >= midMin
+        // 最小的自动满足（因为总数达标）
+        return counts[2] >= Config.fakeWinMajorMin && counts[1] >= Config.fakeWinMidMin;
     }
 
     string GetCardName(CardData c) => $"{GetCardTypeName(c.type)}{(c.quality == CardData.CardQuality.Real ? "真" : "假")}";

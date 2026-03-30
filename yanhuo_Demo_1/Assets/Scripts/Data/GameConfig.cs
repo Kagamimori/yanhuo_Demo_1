@@ -40,12 +40,20 @@ public class GameConfig
     // 购买/验货
     public float inspectFeeRatio = 0.5f;          // 验货费比例（向上取整）
     public int defaultPlayerBuyPrice = 10;        // 玩家购买默认出价
+    // 拆牌机制
+    public int stealCost = 14;
+    // ========== 获胜条件配置 ==========
+    // 真商获胜条件：每种真货所需数量
+    public int realWinTotalRequired = 9;   // 总共需要多少张真牌
+    public int realWinMajorMin = 3;        // 最多的那一类最少需要几张
+    public int realWinMidMin = 3;          // 第二多的那一类最少需要几张
 
-    // 获胜条件
-    public int realWinRequired = 3;               // 真商每种货物所需数量
-    public int fakeWinTotal = 7;                  // 假商所需总假牌数
-    public int fakeWinMinMajor = 3;               // 假商最多一种的数量
-    public int fakeWinMid = 2;                    // 假商第二种的数量（排序后中间值≥2即可）
+    // 假商获胜条件
+    public int fakeWinTotalRequired = 7;           // 总假牌数量要求
+    public int fakeWinMajorMin = 3;                // 最多一种假牌的最小数量
+    public int fakeWinMidMin = 2;                  // 中间一种假牌的最小数量
+    // 注意：假商获胜要求是 3/2/2 分布，即最大>=3，中间>=2，最小>=0（自动满足）
+    // 可通过修改上面的值来调整，例如改成 4/2/1 或 3/3/1 等
 
     // UI 提示延迟
     public float cueTextDuration = 0.8f;          // 提示文字显示时间（秒）

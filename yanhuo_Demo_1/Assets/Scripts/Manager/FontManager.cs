@@ -46,7 +46,7 @@ public class FontManager : MonoBehaviour
             if (text.font != chineseFont)
                 text.font = chineseFont;
         }
-        Debug.Log($"已设置 {allTexts.Length} 个文本的字体");
+       
     }
 
     void ApplyFontToNewTexts()

@@ -43,6 +43,13 @@ public class Panel : MonoBehaviour
     public Button btnConfirmPlayerBuy;          // 确认购买按钮
     public Button btnCancelPlayerBuy;           // 取消购买按钮
 
+    [Header("拆牌按钮")]
+    public Button attackButton;                     // 拆牌按钮（新增）
+
+    private bool isStealMode = false;               // 是否处于拆牌模式
+    private int stealTargetPlayer = -1;             // 拆牌目标玩家索引
+    private int stealTargetSlot = -1;               // 拆牌目标槽位
+
     [Header("通用")]
     public GameObject cardPrefab;
     public TMP_Text gameStateText;
@@ -133,7 +140,8 @@ public class Panel : MonoBehaviour
         if (bankBuyPanel != null) bankBuyPanel.SetActive(false);
         if (playerBuyPanel != null) playerBuyPanel.SetActive(false);
 
-      
+        if (attackButton != null)
+            attackButton.onClick.AddListener(OnAttackButtonClick);
     }
     void Update()
     {
@@ -180,6 +188,22 @@ public class Panel : MonoBehaviour
         // ========== 购买选择面板内的按钮：不在这里控制 ==========
         // 购买选择面板内的按钮状态由 RefreshBuyTargetButtons() 在打开面板时设置
         // 不需要在 Update 中重复控制，否则会导致购买状态下按钮被禁用
+
+        // Attack 按钮：阶段1可用，且不在其他模式时可用
+        if (attackButton != null)
+        {
+            attackButton.interactable = isPhase1 && !isPlaceMode && !isBuyMode && !isStealMode;
+        }
+        // 拆牌模式下，其他操作按钮禁用
+        if (isStealMode)
+        {
+            if (sellButton != null) sellButton.interactable = false;
+            if (placeButton != null) placeButton.interactable = false;
+            if (buyButton != null) buyButton.interactable = false;
+            if (nextButton != null) nextButton.interactable = false;
+            if (btn_bank != null) btn_bank.interactable = false;
+            if (attackButton != null) attackButton.interactable = true;   // 拆牌按钮变为确认
+        }
     }
 
     void CreateCurrentPlayerInfoArea()
@@ -222,6 +246,18 @@ public class Panel : MonoBehaviour
 
     void OnViewPlayerOpenCards(int playerIndex)
     {
+        // 拆牌模式下：允许查看其他玩家，并使其可交互（用于选择卡牌）
+        if (isStealMode)
+        {
+            if (playerIndex == GameManager.Instance.currentTurnIndex)
+            {
+                AddCue("不能对自己拆牌");
+                return;
+            }
+            // 打开目标玩家明牌区，并设置为可交互模式
+            OpenPlayerOpenCardsForSteal(playerIndex);
+            return;
+        }
         if (isPlaceMode)
         {
             AddCue("请先完成当前明牌操作");
@@ -254,7 +290,87 @@ public class Panel : MonoBehaviour
         openCardPanel.SetActive(true);
         currentViewingPlayerIndex = playerIndex;
     }
+    void OpenPlayerOpenCardsForSteal(int playerIndex)
+    {
+        if (playerIndex < 0 || playerIndex >= GameManager.Instance.players.Count) return;
+        PlayerData player = GameManager.Instance.players[playerIndex];
+        openCardPanelTitle.text = $"玩家{playerIndex + 1}的明牌区（拆牌）";
 
+        // 清空容器，重新生成可交互卡牌
+        foreach (Transform child in openCardContainer) Destroy(child.gameObject);
+
+        for (int i = 0; i < 9; i++)
+        {
+            GameObject slot = Instantiate(cardPrefab, openCardContainer);
+            CardUI cardUI = slot.GetComponent<CardUI>();
+
+            if (i < player.openCards.Count && player.openCards[i] != null)
+                cardUI.SetCardData(player.openCards[i]);
+            else
+                cardUI.SetEmpty();
+
+            // 设置可交互
+            int slotIndex = i;
+            cardUI.OnCardClick = (ui) => OnStealSlotSelected(playerIndex, slotIndex);
+            cardUI.SetInteractable(true);
+        }
+
+        openCardPanel.SetActive(true);
+        currentViewingPlayerIndex = playerIndex;
+    }
+    void OnStealSlotSelected(int playerIndex, int slotIndex)
+    {
+        if (!isStealMode) return;
+        // 检查槽位是否有牌
+        PlayerData target = GameManager.Instance.players[playerIndex];
+        if (slotIndex >= target.openCards.Count || target.openCards[slotIndex] == null)
+        {
+            AddCue("该槽位为空，不能选中");
+            return;
+        }
+        // 如果已经选中了同一个目标
+        if (stealTargetPlayer == playerIndex && stealTargetSlot == slotIndex)
+        {
+            // 取消选中
+            ClearStealTarget();
+            AddCue("已取消选中");
+            // 按钮文本变回 "Cancel"
+            if (attackButton != null)
+            {
+                TMP_Text btnText = attackButton.GetComponentInChildren<TMP_Text>();
+                if (btnText != null) btnText.text = "Cancel";
+            }
+            return;
+        }
+
+        // 清除之前的选中（如果有）
+        if (stealTargetPlayer != -1)
+        {
+            // 可以清除之前高亮（如果需要）
+            ClearStealTarget();
+        }
+        stealTargetPlayer = playerIndex;
+        stealTargetSlot = slotIndex;
+        // 按钮文本改为 "Confirm"
+        if (attackButton != null)
+        {
+            TMP_Text btnText = attackButton.GetComponentInChildren<TMP_Text>();
+            if (btnText != null) btnText.text = "Confirm";
+        }
+        AddCue($"已选中玩家{playerIndex + 1}的明牌区槽位{slotIndex + 1}，点击 Confirm 拆牌");
+        // 高亮选中的槽位（可选）
+        HighlightSlot(slotIndex);
+    }
+    void ClearStealTarget()
+    {
+        if (stealTargetPlayer != -1 && stealTargetSlot != -1)
+        {
+            // 清除槽位高亮（如果有记录）
+            ClearSlotHighlight(stealTargetSlot);
+            stealTargetPlayer = -1;
+            stealTargetSlot = -1;
+        }
+    }
     public void CloseOpenCardPanel()
     {
         openCardPanel.SetActive(false);
@@ -370,6 +486,11 @@ public class Panel : MonoBehaviour
         // 阶段1：出售模式
         if (GameManager.Instance.currentState == GameState.Phase1_Sell)
         {
+            if (isStealMode)
+            {
+                AddCue("拆牌模式下不能操作手牌");
+                return;
+            }
             // 如果点击的是假牌，清除选中并提示
             if (card.quality != CardData.CardQuality.Real)
             {
@@ -485,6 +606,51 @@ public class Panel : MonoBehaviour
             ui.SetSelected(false);
         }
     }
+    void OnAttackButtonClick()
+    {
+        // 如果已经在拆牌模式
+        if (isStealMode)
+        {
+            // 如果有选中的目标，则执行拆牌
+            if (stealTargetPlayer != -1 && stealTargetSlot != -1)
+            {
+                ExecuteSteal();
+            }
+            else
+            {
+                // 未选中任何目标，则退出拆牌模式
+                ExitStealMode();
+            }
+            return;
+        }
+
+        // 进入拆牌模式
+        if (GameManager.Instance.currentState != GameState.Phase1_Sell) return;
+        PlayerData cur = GameManager.Instance.players[GameManager.Instance.currentTurnIndex];
+        if (cur.gold < GameManager.Config.stealCost)
+        {
+            AddCue($"金币不足，需要{GameManager.Config.stealCost}金币");
+            return;
+        }
+
+        isStealMode = true;
+        stealTargetPlayer = -1;
+        stealTargetSlot = -1;
+
+        // 改变按钮文本为 "Cancel"
+        if (attackButton != null)
+        {
+            TMP_Text btnText = attackButton.GetComponentInChildren<TMP_Text>();
+            if (btnText != null) btnText.text = "Cancel";
+        }
+
+        // 关闭其他面板
+        CloseOpenCardPanel();
+        if (buyTargetPanel != null) buyTargetPanel.SetActive(false);
+        if (bankBuyPanel != null) bankBuyPanel.SetActive(false);
+
+        AddCue("拆牌模式：点击其他玩家查看其明牌区，点击有牌的卡牌选中，再点 Confirm 拆牌");
+    }
 
     void OnSellButtonClick()
     {
@@ -555,7 +721,10 @@ public class Panel : MonoBehaviour
         selectedHandCard = null;
         selectedOpenSlot = -1;
         CloseOpenCardPanel();
-        
+        bool isPhase1 = (GameManager.Instance.currentState == GameState.Phase1_Sell);
+        bool isPhase2 = (GameManager.Instance.currentState == GameState.Phase2_Action);
+        PlayerData currentPlayer = GameManager.Instance.players[GameManager.Instance.currentTurnIndex];
+
         // OpenPlayerOpenCards 会自动判断 interactive = true（因为是明牌模式且查看自己）
         OpenPlayerOpenCards(GameManager.Instance.currentTurnIndex);
         // 禁用关闭按钮
@@ -567,6 +736,16 @@ public class Panel : MonoBehaviour
             TMP_Text btnText = placeButton.GetComponentInChildren<TMP_Text>();
             if (btnText != null) btnText.text = "Comfirm";
         }
+        if (attackButton != null)
+        {
+            attackButton.interactable = isPhase1 &&
+                                        !currentPlayer.hasSoldThisTurn &&
+                                        !currentPlayer.hasStolenThisTurn &&
+                                        !isPlaceMode &&
+                                        !isBuyMode &&
+                                        !isStealMode;
+        }
+
         AddCue("请点击手牌选择卡牌，再点击明牌区槽位，最后点击「明牌」按钮确认");
         buyButton.interactable = false;
     }
@@ -614,6 +793,76 @@ public class Panel : MonoBehaviour
         {
             AddCue("两项行动都已完成，点击「Next」结束回合");
         }
+    }
+    void ExecuteSteal()
+    {
+        if (!isStealMode) return;
+
+        if (stealTargetPlayer == -1 || stealTargetSlot == -1)
+        {
+            AddCue("请先选择要拆牌的对手和明牌区卡牌");
+            return;
+        }
+
+        PlayerData cur = GameManager.Instance.players[GameManager.Instance.currentTurnIndex];
+        PlayerData target = GameManager.Instance.players[stealTargetPlayer];
+
+        if (cur.gold < GameManager.Config.stealCost)
+        {
+            AddCue($"金币不足，需要{GameManager.Config.stealCost}金币");
+            ExitStealMode();  // 退出拆牌模式
+            return;
+        }
+        // 检查目标槽位是否有牌
+        if (stealTargetSlot >= target.openCards.Count || target.openCards[stealTargetSlot] == null)
+        {
+            AddCue("目标槽位为空，无法拆牌");
+            ExitStealMode();
+            return;
+        }
+
+        CardData stolenCard = target.openCards[stealTargetSlot];
+
+        cur.gold -= GameManager.Config.stealCost;
+
+        // 移动卡牌：从对手明牌区移到对手手牌
+        target.openCards[stealTargetSlot] = null;
+        target.handCards.Add(stolenCard);
+        cur.hasStolenThisTurn = true;
+        // 记录已执行拆牌，本回合不能再明牌
+        cur.hasPlacedThisTurn = true;//反复确认？
+        AddCue($"拆牌成功！花费{GameManager.Config.stealCost}金币，将对手{stealTargetPlayer + 1}的{stolenCard.GetCardName()}移回其手牌");
+        AddLog($"玩家{cur.playerIndex + 1}拆牌成功，从玩家{stealTargetPlayer + 1}的明牌区移除{stolenCard.GetCardName()}");
+
+        // 刷新UI
+        UpdateCurrentPlayerUI();
+        // 如果当前明牌区面板正打开的是目标玩家，刷新显示
+        if (openCardPanel.activeSelf && currentViewingPlayerIndex == stealTargetPlayer)
+        {
+            UpdateOpenCardDisplay(target, false);
+        }
+
+        // 退出拆牌模式
+        ExitStealMode();
+    }
+    void ExitStealMode()
+    {
+        isStealMode = false;
+        stealTargetPlayer = -1;
+        stealTargetSlot = -1;
+        ClearStealTarget();   // 清除选中的目标
+        // 恢复按钮文本
+        if (attackButton != null)
+        {
+            TMP_Text btnText = attackButton.GetComponentInChildren<TMP_Text>();
+            if (btnText != null) btnText.text = "Attack";
+        }
+
+        // 关闭可能打开的明牌区面板
+        CloseOpenCardPanel();
+
+        // 刷新按钮状态
+        AddCue("拆牌模式已退出");
     }
 
     void ExitPlaceMode()
