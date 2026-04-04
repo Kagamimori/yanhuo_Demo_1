@@ -64,6 +64,7 @@ public class GameManager : MonoBehaviour
     private PlayerData pendingTransactionBuyer;
     private PlayerData pendingTransactionSeller;
     private int pendingTransactionPrice;
+
     void Awake()
     {
         if (Instance == null) Instance = this;
@@ -77,7 +78,7 @@ public class GameManager : MonoBehaviour
     private bool isInitialized = false;
     void Start()
     {
-        //
+        //预防反复触发形成空值
         if (isInitialized) return;
         isInitialized = true;
         if (Panel.Instance != null)
@@ -98,21 +99,17 @@ public class GameManager : MonoBehaviour
             text.font = chineseFont;
         }
 
-
         AButton.onClick.AddListener(() => AButton.gameObject.SetActive(false));
         BButton.onClick.AddListener(() => BButton.gameObject.SetActive(false));
 
-        
-
-        StartCoroutine(SetFontForNewTexts(chineseFont));
-
+        StartCoroutine(SetFontForNewTexts(chineseFont));//启动这个协程，协程是一种可以停住的函数（加载字体不是一直调用的）
     }
     
-    IEnumerator SetFontForNewTexts(TMP_FontAsset font)
+    IEnumerator SetFontForNewTexts(TMP_FontAsset font)//协程函数
     {
         while (true)
         {
-            yield return new WaitForSeconds(0.3f);
+            yield return new WaitForSeconds(0.3f);//函数在这里会停一会
             TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
             foreach (var text in texts)
             {
@@ -127,7 +124,7 @@ public class GameManager : MonoBehaviour
     void InitializeGame()
     {
         players.Clear();
-        GenerateCardPools(); // 现在根据配置生成
+        GenerateCardPools(); // 现在根据配置生成，用泛型数组和random去获得打乱的牌组
         for (int i = 0; i < Config.playerCount; i++)
         {
             PlayerData p = new PlayerData();
@@ -137,7 +134,7 @@ public class GameManager : MonoBehaviour
             p.openCards = new List<CardData>();
             for (int j = 0; j < Config.openCardSlotCount; j++)
                 p.openCards.Add(null);
-            p.hasSoldThisTurn = false;
+            p.hasSoldThisTurn = false;//状态一定要重置
             p.hasPlacedThisTurn = false;
             p.hasBoughtThisTurn = false;
             p.rejectedBuyers = new List<int>();
@@ -145,7 +142,7 @@ public class GameManager : MonoBehaviour
             // 添加初始手牌
             for (int t = 0; t < Config.initialRealCardsPerPlayer; t++)
             {
-                CardData realCard = DrawRandomCard(true);
+                CardData realCard = DrawRandomCard(true);//先获取泛型牌组，再打乱，再一张一张发
                 if (realCard != null) p.handCards.Add(realCard);
             }
             for (int t = 0; t < Config.initialFakeCardsPerPlayer; t++)
@@ -153,7 +150,6 @@ public class GameManager : MonoBehaviour
                 CardData fakeCard = DrawRandomCard(false);
                 if (fakeCard != null) p.handCards.Add(fakeCard);
             }
-
             players.Add(p);
         }
 
@@ -172,7 +168,7 @@ public class GameManager : MonoBehaviour
         StartTurn();
     }
 
-    void StartTurn()
+    void StartTurn()//4 4
     {
         //
         AButton.gameObject.SetActive(true);
@@ -190,7 +186,7 @@ public class GameManager : MonoBehaviour
         cur.gold += goldToAdd;
 
         currentState = GameState.Phase1_Sell;
-        //
+        
         // 刷新UI - 重要！
         if (Panel.Instance != null)
         {
@@ -222,9 +218,9 @@ public class GameManager : MonoBehaviour
     }
 
     #region 牌池管理
-    private void GenerateCardPools()
+    private void GenerateCardPools()//分为真卡池和假卡池
     {
-        realCardPool.Clear();
+        realCardPool.Clear();//泛型数组
         fakeCardPool.Clear();
 
         // 使用配置中的数量
@@ -256,7 +252,8 @@ public class GameManager : MonoBehaviour
             pool[randomIndex] = temp;
         }
     }
-    void LoadConfig()
+    #endregion
+    void LoadConfig()//查找文件并修改为局部变量
     {
         TextAsset configFile = Resources.Load<TextAsset>("game_config");
         if (configFile != null)
@@ -280,24 +277,23 @@ public class GameManager : MonoBehaviour
     }
 
     
-
     private CardData DrawRandomCard(bool isReal)
     {
         List<CardData> targetPool = isReal ? realCardPool : fakeCardPool;
 
-        if (targetPool.Count == 0)
+        if (targetPool.Count == 0)//先有牌池，再发牌
         {
             Debug.LogWarning($"{(isReal ? "真货" : "假货")}牌池已空！");
             return null;
         }
-
+        //从“牌顶”发牌
         int lastIndex = targetPool.Count - 1;
         CardData drawnCard = targetPool[lastIndex];
         targetPool.RemoveAt(lastIndex);
-       
+        
         return drawnCard;
     }
-    #endregion
+  
     public void EndTurn()
     {
         if (CheckWinCondition())
@@ -913,7 +909,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void UpdateAllUI()
+    void UpdateAllUI()//分为panel上的玩家个人信息和全局的信息
     {
         Panel.Instance.UpdateCurrentPlayerUI();
        
