@@ -24,7 +24,7 @@ public class FontManager : MonoBehaviour
     {
         if (chineseFont == null)
         {
-            // 尝试加载字体
+            // 尝试加载字体(使用路径查找)
             chineseFont = Resources.Load<TMP_FontAsset>("Fonts/NotoSansSC-Black SDF");
             if (chineseFont == null)
                 chineseFont = Resources.Load<TMP_FontAsset>("NotoSansSC-Black SDF");
@@ -40,7 +40,7 @@ public class FontManager : MonoBehaviour
     public void ApplyFontToAllTexts()
     {
         if (chineseFont == null) return;
-        TMP_Text[] allTexts = FindObjectsOfType<TMP_Text>(true);
+        TMP_Text[] allTexts = FindObjectsOfType<TMP_Text>(true);//找所有的这种文本，然后遍历
         foreach (var text in allTexts)
         {
             if (text.font != chineseFont)
