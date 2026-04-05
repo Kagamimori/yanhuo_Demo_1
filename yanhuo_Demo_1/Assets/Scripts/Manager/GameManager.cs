@@ -137,7 +137,7 @@ public class GameManager : MonoBehaviour
             p.hasSoldThisTurn = false;//状态一定要重置
             p.hasPlacedThisTurn = false;
             p.hasBoughtThisTurn = false;
-            p.rejectedBuyers = new List<int>();
+            p.rejectedBuyers = new List<int>();//用拒绝的玩家索引制造数组，在购买时检查该索引玩家是否在数组内
 
             // 添加初始手牌
             for (int t = 0; t < Config.initialRealCardsPerPlayer; t++)
@@ -168,13 +168,13 @@ public class GameManager : MonoBehaviour
         StartTurn();
     }
 
-    void StartTurn()//4 4
+    void StartTurn()
     {
         //
         AButton.gameObject.SetActive(true);
         //
         PlayerData cur = players[currentTurnIndex];
-        cur.hasSoldThisTurn = cur.hasPlacedThisTurn = cur.hasBoughtThisTurn = false;
+        cur.hasSoldThisTurn = cur.hasPlacedThisTurn = cur.hasBoughtThisTurn = false;//再次重置
         cur.hasBankPurchaseFailed = false;
         cur.hasStolenThisTurn = false;
         cur.hasRejectedThisTurn = false;
@@ -196,12 +196,12 @@ public class GameManager : MonoBehaviour
         {
             Debug.LogError("Panel.Instance 为空！");
         }
-        Panel.Instance?.UpdateCurrentPlayerUI();
+        Panel.Instance?.UpdateCurrentPlayerUI();//更新手牌和展示手牌的方法是分开的//4 5
         UpdateAllUI();
         Panel.Instance.AddCue($"你的回合开始，请选择是否出售真牌");
         Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合开始，获得{goldToAdd}金币，当前金币{cur.gold}");
         Panel.Instance.AddLog($"阶段1：可以出售真牌");
-        Panel.Instance?.ShowCurrentPlayerOpenCards();
+        Panel.Instance?.ShowCurrentPlayerOpenCards();//自动显示
     }
 
     public void SkipToPhase2()

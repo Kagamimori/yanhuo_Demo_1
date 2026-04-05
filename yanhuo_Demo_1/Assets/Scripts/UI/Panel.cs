@@ -380,14 +380,11 @@ public class Panel : MonoBehaviour
     // 更新当前玩家信息区域（名字、金币、身份、手牌）
     public void UpdateCurrentPlayerUI()
     {
-        if (GameManager.Instance == null)
+        if (GameManager.Instance == null)//调用方也不能为空
         {
-            
             return;
         }
-        PlayerData current = GameManager.Instance.players[GameManager.Instance.currentTurnIndex];
-
-        
+        PlayerData current = GameManager.Instance.players[GameManager.Instance.currentTurnIndex];//用的是manager因为text是在manager里面的
 
         if (currentPlayerNameText != null) currentPlayerNameText.text = $"玩家{GameManager.Instance.currentTurnIndex + 1}";
         if (currentPlayerGoldText != null) currentPlayerGoldText.text = $"金币: {current.gold}";
@@ -395,7 +392,6 @@ public class Panel : MonoBehaviour
 
         if (currentHandCardContainer != null)
         {
-            
             UpdateHandCards(currentHandCardContainer, current.handCards);
         }
         else
