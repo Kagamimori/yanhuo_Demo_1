@@ -1,7 +1,7 @@
 {
   "playerCount": 3,
   "initialGold": 12,
-  "turnBaseGold": 4,
+  "turnBaseGold": 3,
   "goldLeaderPenalty": 2,
   "sellRealCardReward": 8,
   "mortgageGain": 8,
@@ -12,9 +12,9 @@
     "Oil": 3,
     "Flour": 3
   },
-  "realSugarCount": 6,
-  "realOilCount": 6,
-  "realFlourCount": 6,
+  "realSugarCount": 5,
+  "realOilCount": 5,
+  "realFlourCount": 5,
   "fakeSugarCount": 4,
   "fakeOilCount": 4,
   "fakeFlourCount": 4,
