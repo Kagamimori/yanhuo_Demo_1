@@ -196,7 +196,7 @@ public class GameManager : MonoBehaviour
         {
             Debug.LogError("Panel.Instance 为空！");
         }
-        Panel.Instance?.UpdateCurrentPlayerUI();//更新手牌和展示手牌的方法是分开的//4 5
+        Panel.Instance?.UpdateCurrentPlayerUI();//更新手牌和展示手牌的方法是分开的
         UpdateAllUI();
         Panel.Instance.AddCue($"你的回合开始，请选择是否出售真牌");
         Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合开始，获得{goldToAdd}金币，当前金币{cur.gold}");
@@ -208,15 +208,31 @@ public class GameManager : MonoBehaviour
     {
         if (currentState != GameState.Phase1_Sell) return;
         currentState = GameState.Phase2_Action;
-        // 更新UI按钮状态
+        // 更新UI按钮状态,分成了两种状态，分别对应不同的按钮组
+
         EnablePhase1Buttons(false);
         EnablePhase2Buttons(true);
-
         UpdateAllUI();
         Panel.Instance.AddCue("进入阶段2：进行明牌和购买操作");
         Panel.Instance.AddLog("进入阶段2：可以明牌或购买");
     }
+    public void EndTurn()
+    {
+        if (CheckWinCondition())
+        {
+            currentState = GameState.GameEnd;
+            Panel.Instance.AddCue("游戏结束！");
+            return;
+        }
 
+        PlayerData cur = players[currentTurnIndex];//获取当前人物，然后获得信息
+        Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合结束");
+        string leaderName = $"玩家{players.OrderByDescending(p => p.gold).First().playerIndex + 1}";//找到金币最多的玩家并返回
+        Panel.Instance.AddLog($"当前金币领先者：{leaderName}");
+
+        currentTurnIndex = (currentTurnIndex + 1) % 3;
+        StartTurn();
+    }
     #region 牌池管理
     private void GenerateCardPools()//分为真卡池和假卡池
     {
@@ -252,6 +268,22 @@ public class GameManager : MonoBehaviour
             pool[randomIndex] = temp;
         }
     }
+    private CardData DrawRandomCard(bool isReal)
+    {
+        List<CardData> targetPool = isReal ? realCardPool : fakeCardPool;
+
+        if (targetPool.Count == 0)//先有牌池，再发牌
+        {
+            Debug.LogWarning($"{(isReal ? "真货" : "假货")}牌池已空！");
+            return null;
+        }
+        //从“牌顶”发牌
+        int lastIndex = targetPool.Count - 1;
+        CardData drawnCard = targetPool[lastIndex];
+        targetPool.RemoveAt(lastIndex);
+
+        return drawnCard;
+    }
     #endregion
     void LoadConfig()//查找文件并修改为局部变量
     {
@@ -277,45 +309,9 @@ public class GameManager : MonoBehaviour
     }
 
     
-    private CardData DrawRandomCard(bool isReal)
-    {
-        List<CardData> targetPool = isReal ? realCardPool : fakeCardPool;
-
-        if (targetPool.Count == 0)//先有牌池，再发牌
-        {
-            Debug.LogWarning($"{(isReal ? "真货" : "假货")}牌池已空！");
-            return null;
-        }
-        //从“牌顶”发牌
-        int lastIndex = targetPool.Count - 1;
-        CardData drawnCard = targetPool[lastIndex];
-        targetPool.RemoveAt(lastIndex);
-        
-        return drawnCard;
-    }
-  
-    public void EndTurn()
-    {
-        if (CheckWinCondition())
-        {
-            currentState = GameState.GameEnd;
-            Panel.Instance.AddCue("游戏结束！");
-            return;
-        }
-        
-
-        PlayerData cur = players[currentTurnIndex];
-        Panel.Instance.AddLog($"玩家{currentTurnIndex + 1}回合结束");
-        string leaderName = $"玩家{players.OrderByDescending(p => p.gold).First().playerIndex + 1}";
-        Panel.Instance.AddLog($"当前金币领先者：{leaderName}");
-
-        currentTurnIndex = (currentTurnIndex + 1) % 3;
-        StartTurn();
-    }
-
     public bool IsGoldLeader(PlayerData player) => player.gold == players.Max(p => p.gold);
 
-    public void OnSellRealCard(CardData card)
+    public void OnSellRealCard(CardData card)//4 8
     {
         PlayerData cur = players[currentTurnIndex];
         if (currentState != GameState.Phase1_Sell || cur.hasSoldThisTurn) return;
@@ -912,7 +908,7 @@ public class GameManager : MonoBehaviour
     void UpdateAllUI()//分为panel上的玩家个人信息和全局的信息
     {
         Panel.Instance.UpdateCurrentPlayerUI();
-       
+        
         if (turnText != null) turnText.text = $"当前回合: 玩家{currentTurnIndex + 1}";
         if (stateText != null) stateText.text = (currentState == GameState.Phase1_Sell) ? "阶段1：出售真牌" : "阶段2：明牌或购买";
         UpdateBankUI();
