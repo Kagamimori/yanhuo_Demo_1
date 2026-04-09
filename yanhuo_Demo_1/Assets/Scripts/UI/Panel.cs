@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class Panel : MonoBehaviour
+public class Panel : MonoBehaviour//Panel通过GameManager.Instance访问游戏数据和调用方法
 {
     public static Panel Instance;
 
@@ -67,7 +67,7 @@ public class Panel : MonoBehaviour
     private TMP_Text currentPlayerIdentityText;
     private Transform currentHandCardContainer;
 
-    // 状态
+    // 状态（有一部分状态是购买中的临时状态，在panel里面申明，这些状态一般是跟UI更新有关）
     private int currentViewingPlayerIndex = -1;
     private bool isPlaceMode = false;
     private bool isBuyMode = false;
@@ -1078,7 +1078,7 @@ public class Panel : MonoBehaviour
             OpenPlayerOpenCards(GameManager.Instance.currentTurnIndex);
         }
 
-        // 检查是否两项行动都已完成
+        // 检查是否两项行动都已完成（提示作用）
         PlayerData cur = GameManager.Instance.players[GameManager.Instance.currentTurnIndex];
         if (cur.hasPlacedThisTurn && cur.hasBoughtThisTurn)
         {
