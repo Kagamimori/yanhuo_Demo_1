@@ -10,7 +10,7 @@ using System.IO;
 using UnityEditor;
 #endif
 
-public class GameManager : MonoBehaviour
+public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Instance更新UI
 {
 
     public static GameManager Instance { get; private set; }
@@ -50,7 +50,7 @@ public class GameManager : MonoBehaviour
     [Header("字体")]
     public TMP_FontAsset chineseFont;
 
-    // 交易临时数据
+    // 交易临时数据（这些状态和数据一般和购买逻辑有关）
     private int currentTransactionBuyerIndex, currentTransactionSellerIndex;
     private CardData.CardType currentTransactionType;
     private int currentTransactionPrice;
@@ -285,6 +285,8 @@ public class GameManager : MonoBehaviour
         return drawnCard;
     }
     #endregion
+    #region
+    #endregion
     void LoadConfig()//查找文件并修改为局部变量
     {
         TextAsset configFile = Resources.Load<TextAsset>("game_config");
@@ -310,8 +312,7 @@ public class GameManager : MonoBehaviour
 
     
     public bool IsGoldLeader(PlayerData player) => player.gold == players.Max(p => p.gold);
-
-    public void OnSellRealCard(CardData card)//4 8
+    public void OnSellRealCard(CardData card)//装在gamemanager里面，原因是在这里需要处理游戏数据（卡牌，金币）
     {
         PlayerData cur = players[currentTurnIndex];
         if (currentState != GameState.Phase1_Sell || cur.hasSoldThisTurn) return;
@@ -327,12 +328,31 @@ public class GameManager : MonoBehaviour
         EnablePhase1Buttons(false);
     }
 
+    public void RequestBuy(int targetIndex, CardData.CardType wantedType, int offerPrice)//把向银行向玩家购买都封在一起了
+    {
+        PlayerData buyer = players[currentTurnIndex];
+        if (currentState != GameState.Phase2_Action || buyer.hasBoughtThisTurn) return;
+
+        if (targetIndex == -1)
+        {
+            BuyFromBank(wantedType, offerPrice);//这里的offerprice只是为了修改而存在
+        }
+        else
+        {
+            if (buyer.rejectedBuyers.Contains(targetIndex))//这里rejectplayer是寄托在买家身上的
+            {
+                Panel.Instance.AddCue("该卖家已拒绝过你，本回合不能再向他购买");
+                return;
+            }
+            ShowSellerDialog(targetIndex, wantedType, offerPrice);
+        }
+    }
     void BuyFromBank(CardData.CardType type, int offerPrice)
     {
         PlayerData buyer = players[currentTurnIndex];
         int actualPrice = IsGoldLeader(buyer) ? Config.bankPriceLeader : Config.bankPriceNormal;
 
-        if (bankStock[type] <= 0)
+        if (bankStock[type] <= 0)//提示+面板刷新
         {
             Panel.Instance.AddCue("银行没有该货物");
             buyer.hasBankPurchaseFailed = true;
@@ -356,38 +376,11 @@ public class GameManager : MonoBehaviour
 
         UpdateAllUI();
         Panel.Instance.AddLog($"从银行购买了{GetCardTypeName(type)}，花费{actualPrice}金币");
-        Panel.Instance.OnBuyComplete();
+        Panel.Instance.OnBuyComplete();//自动关闭有关面板，更新有关状态
     }
-
-    public void SelectCardForPlace(CardData card, int handIndex) { } // 由Panel管理
-
-    public void OnPlaceCardSelected(int slotIndex) { } // 由Panel管理
-
-    public void RequestBuy(int targetIndex, CardData.CardType wantedType, int offerPrice)
-    {
-        PlayerData buyer = players[currentTurnIndex];
-        if (currentState != GameState.Phase2_Action || buyer.hasBoughtThisTurn) return;
-
-        if (targetIndex == -1)
-        {
-            BuyFromBank(wantedType, offerPrice);
-        }
-        else
-        {
-            if (buyer.rejectedBuyers.Contains(targetIndex))
-            {
-                Panel.Instance.AddCue("该卖家已拒绝过你，本回合不能再向他购买");
-                return;
-            }
-            ShowSellerDialog(targetIndex, wantedType, offerPrice);
-        }
-    }
-
-   
-
     private void ShowSellerDialog(int sellerIndex, CardData.CardType wantedType, int offerPrice)
     {
-        currentTransactionBuyerIndex = currentTurnIndex;
+        currentTransactionBuyerIndex = currentTurnIndex;//在这一小段交易过程里分配临时变量
         currentTransactionSellerIndex = sellerIndex;
         currentTransactionType = wantedType;
         currentTransactionPrice = offerPrice;
@@ -396,7 +389,7 @@ public class GameManager : MonoBehaviour
         currentTransactionHandIndex = -1;
         isSellerSelecting = true;
         PlayerData seller = players[sellerIndex];
-        bool canReject = !seller.hasRejectedThisTurn;
+        bool canReject = !seller.hasRejectedThisTurn;//如果已经拒绝过，这局不能再拒绝
         // 设置对话框标题
         if (sellerDialogText != null)
         {
@@ -411,7 +404,7 @@ public class GameManager : MonoBehaviour
 
         // 设置按钮文本和事件
         // 设置 reject 按钮
-        if (rejectButton != null)
+        if (rejectButton != null)// 4 9
         {
             rejectButton.onClick.RemoveAllListeners();
             rejectButton.onClick.AddListener(() => OnSellerResponse(false));
@@ -666,7 +659,6 @@ public class GameManager : MonoBehaviour
         currentTransactionHandIndex = -1;
         isSellerSelecting = false;
     }
-
     private void ProcessRejectedTransaction()
     {
         PlayerData buyer = players[currentTransactionBuyerIndex];
@@ -688,6 +680,7 @@ public class GameManager : MonoBehaviour
         // 通过 Panel 重新打开购买选择面板
         Panel.Instance?.ReopenBuyTargetPanel();
     }
+
 
     private void ShowInspectDialog(CardData card, int price)
     {
@@ -905,7 +898,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void UpdateAllUI()//分为panel上的玩家个人信息和全局的信息
+    void UpdateAllUI()//分为panel上的玩家个人信息和gamemanager全局的信息
     {
         Panel.Instance.UpdateCurrentPlayerUI();
         
