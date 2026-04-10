@@ -404,7 +404,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         // 设置按钮文本和事件
         // 设置 reject 按钮
-        if (rejectButton != null)// 4 9
+        if (rejectButton != null)
         {
             rejectButton.onClick.RemoveAllListeners();
             rejectButton.onClick.AddListener(() => OnSellerResponse(false));
@@ -448,7 +448,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         PlayerData seller = players[sellerIndex];
 
-        // 只显示符合购买类型的卡牌
+        // 只显示符合购买类型的卡牌(先筛选一遍)
         List<CardData> availableCards = seller.handCards.FindAll(c => c.type == wantedType);
 
         if (availableCards.Count == 0)
@@ -473,7 +473,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             cardUI.OnCardClick = (ui) => OnSellerCardSelected(card, cardIndex);
         }
 
-        // 设置 GridLayoutGroup
+        // 设置 GridLayoutGroup（先创建card，card自带按钮，再分配组）
         GridLayoutGroup grid = sellerHandCardContainer.GetComponent<GridLayoutGroup>();
         if (grid == null)
             grid = sellerHandCardContainer.gameObject.AddComponent<GridLayoutGroup>();
@@ -481,7 +481,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         grid.spacing = new Vector2(10, 10);
         grid.childAlignment = TextAnchor.MiddleCenter;
     }
-    private TMP_Text CreateEmptyText(Transform parent, string message)
+    private TMP_Text CreateEmptyText(Transform parent, string message)//这里不知道为什么展示了一个自动生成方法
     {
         GameObject textObj = new GameObject("EmptyText");
         textObj.transform.SetParent(parent);
@@ -492,9 +492,9 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         text.color = Color.gray;
 
         RectTransform rect = textObj.GetComponent<RectTransform>();
-        rect.anchorMin = Vector2.zero;
+        rect.anchorMin = Vector2.zero;//左下锚点和右上锚点
         rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
+        rect.offsetMin = Vector2.zero;//offset指覆盖范围
         rect.offsetMax = Vector2.zero;
 
         return text;
