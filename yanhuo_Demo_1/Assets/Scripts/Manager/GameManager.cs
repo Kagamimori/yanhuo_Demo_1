@@ -216,6 +216,14 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         Panel.Instance.AddCue("进入阶段2：进行明牌和购买操作");
         Panel.Instance.AddLog("进入阶段2：可以明牌或购买");
     }
+    public void CheckTurnEnd()
+    {
+        PlayerData cur = players[currentTurnIndex];
+        if (cur.hasPlacedThisTurn && cur.hasBoughtThisTurn)
+        {
+            EndTurn();
+        }
+    }
     public void EndTurn()
     {
         if (CheckWinCondition())
@@ -312,6 +320,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
     
     public bool IsGoldLeader(PlayerData player) => player.gold == players.Max(p => p.gold);
+    #region 售卖真牌（向银行）
     public void OnSellRealCard(CardData card)//装在gamemanager里面，原因是在这里需要处理游戏数据（卡牌，金币）
     {
         PlayerData cur = players[currentTurnIndex];
@@ -327,7 +336,8 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         Panel.Instance.AddCue("出售成功，点击「Next」按钮进入下一阶段");
         EnablePhase1Buttons(false);
     }
-
+    #endregion
+    #region 购买逻辑
     public void RequestBuy(int targetIndex, CardData.CardType wantedType, int offerPrice)//把向银行向玩家购买都封在一起了
     {
         PlayerData buyer = players[currentTurnIndex];
@@ -378,6 +388,8 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         Panel.Instance.AddLog($"从银行购买了{GetCardTypeName(type)}，花费{actualPrice}金币");
         Panel.Instance.OnBuyComplete();//自动关闭有关面板，更新有关状态
     }
+    #endregion
+
     private void ShowSellerDialog(int sellerIndex, CardData.CardType wantedType, int offerPrice)
     {
         currentTransactionBuyerIndex = currentTurnIndex;//在这一小段交易过程里分配临时变量
@@ -433,6 +445,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         BButton.gameObject.SetActive(true);
         AButton.gameObject.SetActive(true);
     }
+    #region 手牌管理相关
     private void RefreshSellerHandCards(int sellerIndex, CardData.CardType wantedType)
     {
         // 使用专门的容器
@@ -481,7 +494,10 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         grid.spacing = new Vector2(10, 10);
         grid.childAlignment = TextAnchor.MiddleCenter;
     }
-    private TMP_Text CreateEmptyText(Transform parent, string message)//这里不知道为什么展示了一个自动生成方法
+    #endregion
+
+    #region 卖家卡牌UI交互
+    private TMP_Text CreateEmptyText(Transform parent, string message)//这里不知道为什么展示了一个自动生成UI方法
     {
         GameObject textObj = new GameObject("EmptyText");
         textObj.transform.SetParent(parent);
@@ -499,14 +515,14 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         return text;
     }
-    private void OnSellerCardSelected(CardData card, int cardIndex)
+    private void OnSellerCardSelected(CardData card, int cardIndex)//其实只要是牌组的交互，都应该可以用一个方法管理
     {
         if (!isSellerSelecting) return;
 
         // 清除之前的高亮
         ClearSellerCardHighlights();
 
-        // 记录选中的卡牌
+        // 记录选中的卡牌(处理不是用bool)
         currentTransactionCard = card;
         currentTransactionHandIndex = cardIndex;
 
@@ -517,7 +533,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         if (acceptButton != null)
         {
             acceptButton.interactable = true;
-            acceptButton.GetComponentInChildren<TMP_Text>().text = "Sell";
+            acceptButton.GetComponentInChildren<TMP_Text>().text = "Sell";//同时改变按钮文本
         }
 
         // 更新提示文本
@@ -526,7 +542,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             sellerDialogText.text = $"已选中 {card.GetCardName()}，点击「Sell」确认出售";
         }
     }
-    private void HighlightSellerCard(CardData card)
+    private void HighlightSellerCard(CardData card)//选中，查找，还有真正高亮都是分开的
     {
         if (sellerHandCardContainer == null) return;
 
@@ -554,7 +570,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             }
         }
     }
-
     // 卖家确认出售（点击 Sell 按钮）
     private void OnSellerConfirm()
     {
@@ -565,14 +580,13 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             Panel.Instance?.AddCue("请先选择要出售的卡牌");
             return;
         }
-        
-        
+
+
         // 确认出售，执行交易
         isSellerSelecting = false;
         ProcessAcceptedTransaction();
     }
-
-
+    #endregion
     private void OnSellerResponse(bool accepted)
     {
         if (sellerDialogPanel != null)
@@ -582,9 +596,9 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         {
             ProcessRejectedTransaction();
         }
-        // 注意：如果 accepted 为 true，实际交易在 OnSellerConfirm 中执行，这里不处理
+       
     }
-
+    #region 售卖逻辑处理
     private void ProcessAcceptedTransaction()
     {
         PlayerData buyer = players[currentTransactionBuyerIndex];
@@ -597,7 +611,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             return;
         }
 
-        // 验证卡牌是否还在手牌中
+        // 验证卡牌是否还在手牌中（跟原本的设计意愿不太一样）
         if (!seller.handCards.Contains(currentTransactionCard))
         {
             Panel.Instance?.AddCue("选中的卡牌已不存在");
@@ -626,7 +640,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             Panel.Instance?.AddCue($"玩家{buyer.playerIndex + 1}支付{currentTransactionPrice}金币给玩家{seller.playerIndex + 1}");
         }
 
-        // 注意：这里不转移卡牌！等待验货结果
+        // 注意：这里不转移卡牌！等待验货结果（用一个中间量管理这个牌）
         // 保存临时卡牌信息，用于验货后转移
         pendingTransactionCard = currentTransactionCard;
         pendingTransactionBuyer = buyer;
@@ -654,7 +668,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         // 显示验货对话框
         ShowInspectDialog(pendingTransactionCard, pendingTransactionPrice);
 
-        // 重置交易数据
+        // 重置交易数据（关键！）
         currentTransactionCard = null;
         currentTransactionHandIndex = -1;
         isSellerSelecting = false;
@@ -680,7 +694,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         // 通过 Panel 重新打开购买选择面板
         Panel.Instance?.ReopenBuyTargetPanel();
     }
-
+#endregion
 
     private void ShowInspectDialog(CardData card, int price)
     {
@@ -718,7 +732,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             });
         }
     }
-
+    #region 验牌逻辑处理
     private void OnInspectChoice(bool inspect)
     {
         Panel.Instance?.AddLog($"OnInspectChoice 被调用 - inspect: {inspect}");
@@ -751,7 +765,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
             bool isReal = (card.quality == CardData.CardQuality.Real);
             ExecuteInspect(isReal, price, buyer, seller);
 
-            // 验货后转移卡牌
+            // 验货后转移卡牌（这里没有实时更新卖家的手牌，因为暂时还是单机）
             seller.handCards.Remove(card);
             buyer.handCards.Add(card);
             Panel.Instance?.AddLog($"验货完成，卡牌已转移: {GetCardName(card)}");
@@ -777,12 +791,11 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         Panel.Instance?.AddLog($"买家手牌数量: {buyer.handCards.Count}");
         Panel.Instance?.AddLog($"卖家手牌数量: {seller.handCards.Count}");
 
-        // 清空临时数据
+        // 清空临时数据（关键！）
         pendingTransactionCard = null;
         pendingTransactionBuyer = null;
         pendingTransactionSeller = null;
 
-        // 注意：这里不调用 CheckTurnEnd()，让玩家继续本回合的其他操作
         // 如果玩家已经完成了明牌操作，会在 Panel 的 Update 中自动结束回合
     }
 
@@ -842,7 +855,8 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         Panel.Instance?.AddLog($"验货后 - 买家金币: {buyer.gold}, 卖家金币: {seller.gold}");
     }
-    private bool HandleInsufficientGold(PlayerData player, int requiredGold, PlayerData receiver, int amountToGive)
+    #endregion
+    private bool HandleInsufficientGold(PlayerData player, int requiredGold, PlayerData receiver, int amountToGive)//4-11
     {
         if (player == null)
         {
@@ -889,14 +903,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         return true;
     }
 
-    public void CheckTurnEnd()
-    {
-        PlayerData cur = players[currentTurnIndex];
-        if (cur.hasPlacedThisTurn && cur.hasBoughtThisTurn)
-        {
-            EndTurn();
-        }
-    }
+   
 
     void UpdateAllUI()//分为panel上的玩家个人信息和gamemanager全局的信息
     {
