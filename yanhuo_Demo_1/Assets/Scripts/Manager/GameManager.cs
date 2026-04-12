@@ -12,7 +12,7 @@ using UnityEditor;
 
 public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Instance更新UI
 {
-
+    #region 基础设置
     public static GameManager Instance { get; private set; }
     public static GameConfig Config { get; private set; }
 
@@ -64,7 +64,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
     private PlayerData pendingTransactionBuyer;
     private PlayerData pendingTransactionSeller;
     private int pendingTransactionPrice;
-
+    #endregion
     void Awake()
     {
         if (Instance == null) Instance = this;
@@ -73,7 +73,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         // 加载配置文件
         LoadConfig();
     }
-    
+   
     //
     private bool isInitialized = false;
     void Start()
@@ -104,23 +104,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         StartCoroutine(SetFontForNewTexts(chineseFont));//启动这个协程，协程是一种可以停住的函数（加载字体不是一直调用的）
     }
-    
-    IEnumerator SetFontForNewTexts(TMP_FontAsset font)//协程函数
-    {
-        while (true)
-        {
-            yield return new WaitForSeconds(0.3f);//函数在这里会停一会
-            TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
-            foreach (var text in texts)
-            {
-                if (text.font != font && text.font != null)
-                {
-                    text.font = font;
-                }
-            }
-        }
-    }
-
     void InitializeGame()
     {
         players.Clear();
@@ -167,7 +150,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         currentTurnIndex = Random.Range(0, Config.playerCount);
         StartTurn();
     }
-
     void StartTurn()
     {
         //
@@ -203,7 +185,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         Panel.Instance.AddLog($"阶段1：可以出售真牌");
         Panel.Instance?.ShowCurrentPlayerOpenCards();//自动显示
     }
-
     public void SkipToPhase2()
     {
         if (currentState != GameState.Phase1_Sell) return;
@@ -241,6 +222,136 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         currentTurnIndex = (currentTurnIndex + 1) % 3;
         StartTurn();
     }
+    private void ShowSellerDialog(int sellerIndex, CardData.CardType wantedType, int offerPrice)
+    {
+        currentTransactionBuyerIndex = currentTurnIndex;//在这一小段交易过程里分配临时变量
+        currentTransactionSellerIndex = sellerIndex;
+        currentTransactionType = wantedType;
+        currentTransactionPrice = offerPrice;
+
+        // 重置选择状态
+        currentTransactionHandIndex = -1;
+        isSellerSelecting = true;
+        PlayerData seller = players[sellerIndex];
+        bool canReject = !seller.hasRejectedThisTurn;//如果已经拒绝过，这局不能再拒绝
+        // 设置对话框标题
+        if (sellerDialogText != null)
+        {
+            sellerDialogText.text = $"玩家{sellerIndex + 1}，\n" +
+                                    $"玩家{currentTurnIndex + 1}想以{offerPrice}金币的价格\n" +
+                                    $"向您购买【{GetCardTypeName(wantedType)}】\n\n" +
+                                    $"请点击手牌选择要出售的{GetCardTypeName(wantedType)}";
+        }
+
+        // 刷新卖家的手牌显示
+        RefreshSellerHandCards(sellerIndex, wantedType);
+
+        // 设置按钮文本和事件
+        // 设置 reject 按钮
+        if (rejectButton != null)
+        {
+            rejectButton.onClick.RemoveAllListeners();
+            rejectButton.onClick.AddListener(() => OnSellerResponse(false));
+            rejectButton.interactable = canReject;
+
+            TMP_Text rejectText = rejectButton.GetComponentInChildren<TMP_Text>();
+            if (rejectText != null)
+            {
+                rejectText.text = canReject ? "Refuse" : "已拒绝过";
+            }
+        }
+        if (acceptButton != null)
+        {
+            acceptButton.GetComponentInChildren<TMP_Text>().text = "Confirm";
+            acceptButton.onClick.RemoveAllListeners();
+            acceptButton.onClick.AddListener(() => OnSellerConfirm());
+            acceptButton.interactable = false;  // 初始禁用，直到选中卡牌
+        }
+
+
+
+        if (sellerDialogPanel != null)
+            sellerDialogPanel.SetActive(true);
+
+        //
+        BButton.gameObject.SetActive(true);
+        AButton.gameObject.SetActive(true);
+    }
+    private void ShowInspectDialog(CardData card, int price)
+    {
+        // 使用传入的参数，不依赖全局变量
+        string goodsName = GetCardTypeName(card.type);
+        int inspectPrice = Mathf.CeilToInt(price * 0.5f);
+
+        Panel.Instance?.AddLog($"显示验货对话框 - 卡牌: {GetCardName(card)}, 价格: {price}, 验货费: {inspectPrice}");
+
+        if (inspectDialogText != null)
+        {
+            inspectDialogText.text = $"您购买了一张【{goodsName}】\n\n是否花费{inspectPrice}金币进行验货？\n\n" +
+                                     $"验货后如果是真货，买家多付{inspectPrice}金币\n" +
+                                     $"如果是假货，卖家退还{price}金币并赔偿{inspectPrice}金币";
+        }
+
+        if (inspectDialogPanel != null)
+            inspectDialogPanel.SetActive(true);
+
+        if (inspectButton != null)
+        {
+            inspectButton.onClick.RemoveAllListeners();
+            inspectButton.onClick.AddListener(() => {
+                Panel.Instance?.AddLog($"验货按钮点击 - 卡牌: {GetCardName(card)}");
+                OnInspectChoice(true);
+            });
+        }
+
+        if (noInspectButton != null)
+        {
+            noInspectButton.onClick.RemoveAllListeners();
+            noInspectButton.onClick.AddListener(() => {
+                Panel.Instance?.AddLog($"不验货按钮点击 - 卡牌: {GetCardName(card)}");
+                OnInspectChoice(false);
+            });
+        }
+    }
+    #region 基础配置
+    void LoadConfig()//查找文件并修改为局部变量
+    {
+        TextAsset configFile = Resources.Load<TextAsset>("game_config");
+        if (configFile != null)
+        {
+            Config = JsonMapper.ToObject<GameConfig>(configFile.text);
+            Debug.Log("游戏配置加载成功");
+        }
+        else
+        {
+            Debug.LogError("未找到 game_config.json，使用默认值");
+            Config = new GameConfig();
+        }
+
+        // 将配置中的数量赋值给局部变量
+        REAL_SUGAR_COUNT = Config.realSugarCount;
+        REAL_OIL_COUNT = Config.realOilCount;
+        REAL_FLOUR_COUNT = Config.realFlourCount;
+        FAKE_SUGAR_COUNT = Config.fakeSugarCount;
+        FAKE_OIL_COUNT = Config.fakeOilCount;
+        FAKE_FLOUR_COUNT = Config.fakeFlourCount;
+    }
+    IEnumerator SetFontForNewTexts(TMP_FontAsset font)//协程函数
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(0.3f);//函数在这里会停一会
+            TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
+            foreach (var text in texts)
+            {
+                if (text.font != font && text.font != null)
+                {
+                    text.font = font;
+                }
+            }
+        }
+    }
+    #endregion
     #region 牌池管理
     private void GenerateCardPools()//分为真卡池和假卡池
     {
@@ -293,33 +404,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         return drawnCard;
     }
     #endregion
-    #region
-    #endregion
-    void LoadConfig()//查找文件并修改为局部变量
-    {
-        TextAsset configFile = Resources.Load<TextAsset>("game_config");
-        if (configFile != null)
-        {
-            Config = JsonMapper.ToObject<GameConfig>(configFile.text);
-            Debug.Log("游戏配置加载成功");
-        }
-        else
-        {
-            Debug.LogError("未找到 game_config.json，使用默认值");
-            Config = new GameConfig();
-        }
-
-        // 将配置中的数量赋值给局部变量
-        REAL_SUGAR_COUNT = Config.realSugarCount;
-        REAL_OIL_COUNT = Config.realOilCount;
-        REAL_FLOUR_COUNT = Config.realFlourCount;
-        FAKE_SUGAR_COUNT = Config.fakeSugarCount;
-        FAKE_OIL_COUNT = Config.fakeOilCount;
-        FAKE_FLOUR_COUNT = Config.fakeFlourCount;
-    }
-
-    
-    public bool IsGoldLeader(PlayerData player) => player.gold == players.Max(p => p.gold);
     #region 售卖真牌（向银行）
     public void OnSellRealCard(CardData card)//装在gamemanager里面，原因是在这里需要处理游戏数据（卡牌，金币）
     {
@@ -389,62 +473,55 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         Panel.Instance.OnBuyComplete();//自动关闭有关面板，更新有关状态
     }
     #endregion
-
-    private void ShowSellerDialog(int sellerIndex, CardData.CardType wantedType, int offerPrice)
+    #region 关键条件判断
+    public bool IsGoldLeader(PlayerData player) => player.gold == players.Max(p => p.gold);
+    private bool HandleInsufficientGold(PlayerData player, int requiredGold, PlayerData receiver, int amountToGive)//4-11
     {
-        currentTransactionBuyerIndex = currentTurnIndex;//在这一小段交易过程里分配临时变量
-        currentTransactionSellerIndex = sellerIndex;
-        currentTransactionType = wantedType;
-        currentTransactionPrice = offerPrice;
-
-        // 重置选择状态
-        currentTransactionHandIndex = -1;
-        isSellerSelecting = true;
-        PlayerData seller = players[sellerIndex];
-        bool canReject = !seller.hasRejectedThisTurn;//如果已经拒绝过，这局不能再拒绝
-        // 设置对话框标题
-        if (sellerDialogText != null)
+        if (player == null)
         {
-            sellerDialogText.text = $"玩家{sellerIndex + 1}，\n" +
-                                    $"玩家{currentTurnIndex + 1}想以{offerPrice}金币的价格\n" +
-                                    $"向您购买【{GetCardTypeName(wantedType)}】\n\n" +
-                                    $"请点击手牌选择要出售的{GetCardTypeName(wantedType)}";
+            Panel.Instance?.AddCue("处理失败：玩家数据无效");
+            return false;
         }
 
-        // 刷新卖家的手牌显示
-        RefreshSellerHandCards(sellerIndex, wantedType);
+        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}需要{requiredGold}金币，当前{player.gold}金币，不足！");
 
-        // 设置按钮文本和事件
-        // 设置 reject 按钮
-        if (rejectButton != null)
+        // 查找一张真牌
+        CardData realCard = player.handCards.Find(c => c.quality == CardData.CardQuality.Real);
+        if (realCard == null)
         {
-            rejectButton.onClick.RemoveAllListeners();
-            rejectButton.onClick.AddListener(() => OnSellerResponse(false));
-            rejectButton.interactable = canReject;
-
-            TMP_Text rejectText = rejectButton.GetComponentInChildren<TMP_Text>();
-            if (rejectText != null)
-            {
-                rejectText.text = canReject ? "Refuse" : "已拒绝过";
-            }
-        }
-        if (acceptButton != null)
-        {
-            acceptButton.GetComponentInChildren<TMP_Text>().text = "Confirm";
-            acceptButton.onClick.RemoveAllListeners();
-            acceptButton.onClick.AddListener(() => OnSellerConfirm());
-            acceptButton.interactable = false;  // 初始禁用，直到选中卡牌
+            // 没有真牌可扣，玩家破产
+            Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}没有真牌可扣除，宣布破产！");
+            HandleBankruptcy(player);
+            return false;
         }
 
-        
+        // 扣除一张真牌（使用配置中的抵押获得金币）
+        player.handCards.Remove(realCard);
+        player.gold += Config.mortgageGain;  // 使用配置的抵押收益
+        bankStock[realCard.type]++;
+        Panel.Instance?.AddLog($"玩家{player.playerIndex + 1}因金币不足，被强制扣除一张{GetCardName(realCard)}，获得{Config.mortgageGain}金币");
+        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}被强制扣除一张{GetCardName(realCard)}，获得{Config.mortgageGain}金币");
 
-        if (sellerDialogPanel != null)
-            sellerDialogPanel.SetActive(true);
+        // 检查是否还需要继续抵押
+        if (player.gold < requiredGold)
+        {
+            // 递归调用继续抵押
+            return HandleInsufficientGold(player, requiredGold, receiver, amountToGive);
+        }
 
-        //
-        BButton.gameObject.SetActive(true);
-        AButton.gameObject.SetActive(true);
+        // 支付所需金币
+        player.gold -= requiredGold;
+
+        // 接收方获得应得金币
+        if (receiver != null && amountToGive > 0)
+        {
+            receiver.gold += amountToGive;
+            Panel.Instance?.AddCue($"玩家{receiver.playerIndex + 1}获得{amountToGive}金币，当前{receiver.gold}金币");
+        }
+
+        return true;
     }
+    #endregion
     #region 手牌管理相关
     private void RefreshSellerHandCards(int sellerIndex, CardData.CardType wantedType)
     {
@@ -495,7 +572,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         grid.childAlignment = TextAnchor.MiddleCenter;
     }
     #endregion
-
     #region 卖家卡牌UI交互
     private TMP_Text CreateEmptyText(Transform parent, string message)//这里不知道为什么展示了一个自动生成UI方法
     {
@@ -587,17 +663,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         ProcessAcceptedTransaction();
     }
     #endregion
-    private void OnSellerResponse(bool accepted)
-    {
-        if (sellerDialogPanel != null)
-            sellerDialogPanel.SetActive(false);
-
-        if (!accepted)
-        {
-            ProcessRejectedTransaction();
-        }
-       
-    }
     #region 售卖逻辑处理
     private void ProcessAcceptedTransaction()
     {
@@ -694,44 +759,18 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         // 通过 Panel 重新打开购买选择面板
         Panel.Instance?.ReopenBuyTargetPanel();
     }
-#endregion
-
-    private void ShowInspectDialog(CardData card, int price)
+    private void OnSellerResponse(bool accepted)
     {
-        // 使用传入的参数，不依赖全局变量
-        string goodsName = GetCardTypeName(card.type);
-        int inspectPrice = Mathf.CeilToInt(price * 0.5f);
+        if (sellerDialogPanel != null)
+            sellerDialogPanel.SetActive(false);
 
-        Panel.Instance?.AddLog($"显示验货对话框 - 卡牌: {GetCardName(card)}, 价格: {price}, 验货费: {inspectPrice}");
-
-        if (inspectDialogText != null)
+        if (!accepted)
         {
-            inspectDialogText.text = $"您购买了一张【{goodsName}】\n\n是否花费{inspectPrice}金币进行验货？\n\n" +
-                                     $"验货后如果是真货，买家多付{inspectPrice}金币\n" +
-                                     $"如果是假货，卖家退还{price}金币并赔偿{inspectPrice}金币";
+            ProcessRejectedTransaction();
         }
 
-        if (inspectDialogPanel != null)
-            inspectDialogPanel.SetActive(true);
-
-        if (inspectButton != null)
-        {
-            inspectButton.onClick.RemoveAllListeners();
-            inspectButton.onClick.AddListener(() => {
-                Panel.Instance?.AddLog($"验货按钮点击 - 卡牌: {GetCardName(card)}");
-                OnInspectChoice(true);
-            });
-        }
-
-        if (noInspectButton != null)
-        {
-            noInspectButton.onClick.RemoveAllListeners();
-            noInspectButton.onClick.AddListener(() => {
-                Panel.Instance?.AddLog($"不验货按钮点击 - 卡牌: {GetCardName(card)}");
-                OnInspectChoice(false);
-            });
-        }
     }
+    #endregion
     #region 验牌逻辑处理
     private void OnInspectChoice(bool inspect)
     {
@@ -856,54 +895,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         Panel.Instance?.AddLog($"验货后 - 买家金币: {buyer.gold}, 卖家金币: {seller.gold}");
     }
     #endregion
-    private bool HandleInsufficientGold(PlayerData player, int requiredGold, PlayerData receiver, int amountToGive)//4-11
-    {
-        if (player == null)
-        {
-            Panel.Instance?.AddCue("处理失败：玩家数据无效");
-            return false;
-        }
-
-        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}需要{requiredGold}金币，当前{player.gold}金币，不足！");
-
-        // 查找一张真牌
-        CardData realCard = player.handCards.Find(c => c.quality == CardData.CardQuality.Real);
-        if (realCard == null)
-        {
-            // 没有真牌可扣，玩家破产
-            Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}没有真牌可扣除，宣布破产！");
-            HandleBankruptcy(player);
-            return false;
-        }
-
-        // 扣除一张真牌（使用配置中的抵押获得金币）
-        player.handCards.Remove(realCard);
-        player.gold += Config.mortgageGain;  // 使用配置的抵押收益
-        bankStock[realCard.type]++;
-        Panel.Instance?.AddLog($"玩家{player.playerIndex + 1}因金币不足，被强制扣除一张{GetCardName(realCard)}，获得{Config.mortgageGain}金币");
-        Panel.Instance?.AddCue($"玩家{player.playerIndex + 1}被强制扣除一张{GetCardName(realCard)}，获得{Config.mortgageGain}金币");
-
-        // 检查是否还需要继续抵押
-        if (player.gold < requiredGold)
-        {
-            // 递归调用继续抵押
-            return HandleInsufficientGold(player, requiredGold, receiver, amountToGive);
-        }
-
-        // 支付所需金币
-        player.gold -= requiredGold;
-
-        // 接收方获得应得金币
-        if (receiver != null && amountToGive > 0)
-        {
-            receiver.gold += amountToGive;
-            Panel.Instance?.AddCue($"玩家{receiver.playerIndex + 1}获得{amountToGive}金币，当前{receiver.gold}金币");
-        }
-
-        return true;
-    }
-
-   
+    #region 乱七八糟的UI管理
 
     void UpdateAllUI()//分为panel上的玩家个人信息和gamemanager全局的信息
     {
@@ -916,6 +908,36 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
     void UpdateBankUI() { /* 简单显示银行库存，可省略 */ }
 
+    private void LogAllPlayersGold()
+    {
+        Panel.Instance?.AddLog("=== 当前所有玩家金币 ===");
+        for (int i = 0; i < players.Count; i++)
+        {
+            Panel.Instance?.AddLog($"玩家{i + 1}: {players[i].gold}金币");
+        }
+        Panel.Instance?.AddLog("======================");
+    }
+    private void EnablePhase1Buttons(bool enable)
+    {
+        if (Panel.Instance != null && Panel.Instance.sellButton != null)
+        {
+            Panel.Instance.sellButton.interactable = enable;
+        }
+    }
+
+    // 启用/禁用阶段2按钮（明牌和购买按钮）
+    private void EnablePhase2Buttons(bool enable)
+    {
+        if (Panel.Instance != null)
+        {
+            if (Panel.Instance.placeButton != null)
+                Panel.Instance.placeButton.interactable = enable;
+            if (Panel.Instance.buyButton != null)
+                Panel.Instance.buyButton.interactable = enable;
+        }
+    }
+    #endregion
+    #region 结束
     bool CheckWinCondition()
     {
         foreach (var p in players)
@@ -1009,72 +1031,8 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         currentState = GameState.GameEnd;
     }
-
-    // 确定获胜者（破产场景）
-    private PlayerData DetermineWinner(List<PlayerData> remainingPlayers)
-    {
-        if (remainingPlayers.Count == 1)
-        {
-            return remainingPlayers[0];
-        }
-
-        // 找出金币最多的玩家
-        int maxGold = remainingPlayers.Max(p => p.gold);
-        List<PlayerData> goldLeaders = remainingPlayers.Where(p => p.gold == maxGold).ToList();
-
-        if (goldLeaders.Count == 1)
-        {
-            return goldLeaders[0];
-        }
-
-        // 金币相同，比较真牌数量（手牌+明牌区）
-        PlayerData winner = null;
-        int maxRealCards = -1;
-
-        foreach (var player in goldLeaders)
-        {
-            int realCardCount = player.handCards.Count(c => c.quality == CardData.CardQuality.Real) +
-                                player.openCards.Count(c => c != null && c.quality == CardData.CardQuality.Real);
-
-            Panel.Instance?.AddLog($"玩家{player.playerIndex + 1} 真牌数量: {realCardCount}");
-
-            if (realCardCount > maxRealCards)
-            {
-                maxRealCards = realCardCount;
-                winner = player;
-            }
-        }
-
-        return winner;
-    }
-    private void LogAllPlayersGold()
-    {
-        Panel.Instance?.AddLog("=== 当前所有玩家金币 ===");
-        for (int i = 0; i < players.Count; i++)
-        {
-            Panel.Instance?.AddLog($"玩家{i + 1}: {players[i].gold}金币");
-        }
-        Panel.Instance?.AddLog("======================");
-    }
-    private void EnablePhase1Buttons(bool enable)
-    {
-        if (Panel.Instance != null && Panel.Instance.sellButton != null)
-        {
-            Panel.Instance.sellButton.interactable = enable;
-        }
-    }
-
-    // 启用/禁用阶段2按钮（明牌和购买按钮）
-    private void EnablePhase2Buttons(bool enable)
-    {
-        if (Panel.Instance != null)
-        {
-            if (Panel.Instance.placeButton != null)
-                Panel.Instance.placeButton.interactable = enable;
-            if (Panel.Instance.buyButton != null)
-                Panel.Instance.buyButton.interactable = enable;
-        }
-    }
+    #endregion
+    #region 获胜条件判断
     bool CheckRealWin(List<CardData> openCards)
     {
         if (openCards == null) return false;
@@ -1115,14 +1073,48 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         // 最小的自动满足（因为总数达标）
         return counts[2] >= Config.fakeWinMajorMin && counts[1] >= Config.fakeWinMidMin;
     }
+    // 确定获胜者（破产场景）
+    private PlayerData DetermineWinner(List<PlayerData> remainingPlayers)
+    {
+        if (remainingPlayers.Count == 1)
+        {
+            return remainingPlayers[0];
+        }
 
+        // 找出金币最多的玩家
+        int maxGold = remainingPlayers.Max(p => p.gold);
+        List<PlayerData> goldLeaders = remainingPlayers.Where(p => p.gold == maxGold).ToList();
+
+        if (goldLeaders.Count == 1)
+        {
+            return goldLeaders[0];
+        }
+
+        // 金币相同，比较真牌数量（手牌+明牌区）
+        PlayerData winner = null;
+        int maxRealCards = -1;
+
+        foreach (var player in goldLeaders)
+        {
+            int realCardCount = player.handCards.Count(c => c.quality == CardData.CardQuality.Real) +
+                                player.openCards.Count(c => c != null && c.quality == CardData.CardQuality.Real);
+
+            Panel.Instance?.AddLog($"玩家{player.playerIndex + 1} 真牌数量: {realCardCount}");
+
+            if (realCardCount > maxRealCards)
+            {
+                maxRealCards = realCardCount;
+                winner = player;
+            }
+        }
+
+        return winner;
+    }
+    #endregion
+    #region 简单的判断逻辑
     string GetCardName(CardData c) => $"{GetCardTypeName(c.type)}{(c.quality == CardData.CardQuality.Real ? "真" : "假")}";
     string GetCardTypeName(CardData.CardType t) => t == CardData.CardType.Sugar ? "糖" : t == CardData.CardType.Oil ? "油" : "面";
-
-
-
     public int GetBankStock(CardData.CardType type) => bankStock.ContainsKey(type) ? bankStock[type] : 0;
     public bool BankHasGoods(CardData.CardType type) => GetBankStock(type) > 0;
-
-
+    #endregion
 }
