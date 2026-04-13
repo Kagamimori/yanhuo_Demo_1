@@ -925,7 +925,6 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         }
     }
 
-    // 启用/禁用阶段2按钮（明牌和购买按钮）
     private void EnablePhase2Buttons(bool enable)
     {
         if (Panel.Instance != null)
@@ -989,7 +988,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         // 找出剩下的玩家
         List<PlayerData> remainingPlayers = new List<PlayerData>();
-        foreach (var player in players)
+        foreach (var player in players)//先检查了剩下的玩家是否破产（其实不太可能）
         {
             if (player != bankruptPlayer)
             {
@@ -1070,7 +1069,7 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
         counts.Sort(); // 从小到大排序
 
         // 条件：最大的 >= majorMin，第二大的 >= midMin
-        // 最小的自动满足（因为总数达标）
+        // 最小的自动满足（因为总数达标）//这个检查的计算方法也很有意思，计算机经常有一些“不用管就默认的事情”
         return counts[2] >= Config.fakeWinMajorMin && counts[1] >= Config.fakeWinMidMin;
     }
     // 确定获胜者（破产场景）
@@ -1083,14 +1082,14 @@ public class GameManager : MonoBehaviour//GameManager在状态变化时调用Panel.Insta
 
         // 找出金币最多的玩家
         int maxGold = remainingPlayers.Max(p => p.gold);
-        List<PlayerData> goldLeaders = remainingPlayers.Where(p => p.gold == maxGold).ToList();
+        List<PlayerData> goldLeaders = remainingPlayers.Where(p => p.gold == maxGold).ToList();//这种写法基本就是方法加通用对象
 
         if (goldLeaders.Count == 1)
         {
             return goldLeaders[0];
         }
 
-        // 金币相同，比较真牌数量（手牌+明牌区）
+        // 金币相同，比较真牌数量（手牌+明牌区）//为了玩家数量扩张的可能，这里未破产玩家用的是数组存储
         PlayerData winner = null;
         int maxRealCards = -1;
 

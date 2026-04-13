@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class Panel : MonoBehaviour//PanelÍ¨¹ıGameManager.Instance·ÃÎÊÓÎÏ·Êı¾İºÍµ÷ÓÃ·½·¨
 {
     public static Panel Instance;
-
+    #region ¹ÒÔØUIºÍÊı¾İ
     [Header("Ô¤ÖÆÌå")]
     public GameObject playerInfoPrefab;          // µ±Ç°Íæ¼ÒĞÅÏ¢ÇøÓòµÄÔ¤ÖÆÌå
 
@@ -81,6 +81,7 @@ public class Panel : MonoBehaviour//PanelÍ¨¹ıGameManager.Instance·ÃÎÊÓÎÏ·Êı¾İºÍµ
     {
         return isBuyMode;
     }
+    #endregion
     void Awake()
     {
         if (Instance == null) Instance = this;
